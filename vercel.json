@@ -13,7 +13,7 @@
     },
     {
       "src": "/static/(.*)",
-      "dest": "/backend/static/$1"
+      "dest": "/backend/frontend/$1"
     },
     {
       "src": "/(.*)",
