@@ -25,7 +25,7 @@ const baseTick = 1; // Базовый тик таймера
 let direction = 1; // 1 вперёд, -1 назад
 let timerStart = Date.now();
 
-const API_BASE = 'https://mellstargame.loca.lt';
+const API_BASE = 'mell-star-game-38twg75-korkunof-projects.vercel.app';
 
 // Инициализация приложения
 async function initApp() {

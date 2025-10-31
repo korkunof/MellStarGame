@@ -44,7 +44,7 @@ async def start(update: Update, context: CallbackContext):
     logger.info(f"Получена команда /start от {update.effective_user.id}")
     
     # Кнопка для Web App
-    keyboard = [[InlineKeyboardButton("Играть", web_app=WebAppInfo(url="https://mellstargame.loca.lt/static/index.html"))]]
+    keyboard = [[InlineKeyboardButton("Играть", web_app=WebAppInfo(url="mell-star-game-38twg75-korkunof-projects.vercel.app"))]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
