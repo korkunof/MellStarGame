@@ -1,103 +1,122 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ру">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MellStarGameBot</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script> <!-- TG SDK -->
-    <link rel="stylesheet" href="style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <!-- Главная страница -->
-    <div id="main-page" class="page active">
-        <h1>Зарабатывай Stars за 5 минут в день!</h1>
-        <p>Держи таймер зелёным — 50 Stars за 5 суток. От Мелстроя: удочка для бедных!</p>
-        <button id="subscriptions-btn" class="btn-primary">Подписки</button>
-        <button id="upgrades-btn" class="btn-secondary">Улучшения</button>
-        <button id="how-it-works-btn" class="btn-secondary">Как работает</button>
-        <div class="stats">
-            <h3>Твоя статистика</h3>
-            <p id="subs-count">Подписок: 0/5</p>
-            <p id="progress-stars">Прогресс: 0/50 Stars</p>
-        </div>
-    </div>
-
-    <!-- Страница Подписки -->
-    <div id="subscriptions-page" class="page">
-        <button id="back-btn" class="btn-back">← Назад</button>
-        <h2>Страница подписок</h2>
-        <div id="activation-status">До активации таймера: <span id="pending-subs">5</span> подписок</div>
-        <div id="timer" class="timer hidden">В работе: <span id="timer-display">00:00:00</span></div>
-        <div id="slots-container" class="slots-grid">
-            <!-- Слоты рендерятся JS -->
-        </div>
-        <div class="progress-bar">
-            <h3>Прогресс к 50 Stars</h3>
-            <div id="progress-container">
-                <div id="progress-fill" style="width: 0%;"></div>
+    <div class="app-container">
+        <!-- Страница 1: Главная (Личный кабинет) -->
+        <div id="main-page" class="page active">
+            <h1>Привет, <span id="user-name">Пользователь</span>!</h1>
+            <p>Зарабатывай Stars за удержание подписок. От Мелстроя: удочка для бедных!</p>
+            <div class="stats">
+                <h3>Твоя статистика</h3>
+                <p>Уровень: <span id="level-display">1</span>/45 (Очки: <span id="points-available">0</span>)</p>
+                <p>Распределено очков: <span id="points-allocated">0</span> (Слоты: <span id="slots-count">5</span>)</p>
+                <p>Рефералы: <span id="referrals-count">0</span> (Разгон: <span id="boost-level">0%</span>)</p>
+                <p>Бонус выплат: +<span id="payout-bonus-display">0</span> Star/чекпоинт (Итого: <span id="total-payout-display">10</span>)</p>
+                <p>Купленные слоты:</p>
+                <ul id="ad-slots-stats"></ul>
+                <p>Активных пользователей: <span id="total-users-display">100</span></p>
             </div>
-            <p id="progress-text">0/5 чекпоинтов (0 Stars)</p>
         </div>
-        <button id="info-btn" class="btn-info">Инфо о слотах</button>
-        <button id="buy-slot-btn" class="btn-primary">Купить слот</button>
-        <button id="invite-btn" class="btn-secondary">Пригласить друга (+5% скорости)</button>
-    </div>
 
-    <!-- Модалка Улучшения (из Подписок) -->
-    <div id="upgrades-modal" class="modal hidden">
-        <div class="modal-content">
-            <h3>Улучшения</h3>
-            <div class="upgrade-section">
-                <h4>Ускорение таймера</h4>
-                <p>Текущий: <span id="speed-level">0%</span></p>
-                <p>За друзей: каждый +5%</p>
+        <!-- Страница 2: Подписки -->
+        <div id="subscriptions-page" class="page">
+            <h2>Страница подписок</h2>
+            <div id="activation-status">До активации таймера: <span id="pending-subs">5</span> подписок</div>
+            <div id="timer" class="timer hidden">В работе: <span id="timer-display">00:00:00</span></div>
+            <div id="slots-container" class="slots-grid"></div>
+            <div class="progress-bar">
+                <h3>Прогресс к выплате</h3>
+                <div id="progress-container">
+                    <div id="progress-fill" style="width: 0%;"></div>
+                </div>
+                <p id="progress-text">0/5 чекпоинтов (0 Stars)</p>
             </div>
+            <button id="invite-btn" class="btn-secondary">Пригласить друга (+ поинт реферала)</button>
+            <button id="info-btn" class="btn-info">Инфо о слотах</button>
+        </div>
+
+        <!-- Страница 3: Прокачка -->
+        <div id="upgrades-page" class="page">
+            <h2>Прокачка аккаунта</h2>
             <div class="upgrade-section">
-                <h4>+Слоты</h4>
-                <p>Текущий уровень: <span id="level">1</span> (5 слотов)</p>
-                <p>Распредели очки: <input type="number" id="slots-points" min="0" max="50" value="0"></p>
-                <button id="apply-upgrades">Применить</button>
+                <h4>Уровень</h4>
+                <p>Текущий: <span id="level">1</span>/45 (с бонусом: <span id="level-with-bonus">1</span>)</p>
+                <p>Доступные очки: <span id="points">0</span></p>
+                <p>Распределить на слоты: <input type="number" id="slots-points" min="0" value="0" step="1"></p>
+                <button id="apply-slots">Применить (+слот, +0.088 сек/тик)</button>
             </div>
             <div class="upgrade-section">
-                <h4>Прокачка выплат</h4>
-                <p>Текущий бонус: +<span id="payout-bonus">0</span> Star/чекпоинт</p>
-                <p>Стоимость следующего: <span id="next-upgrade-cost">50</span> Stars</p>
-                <button id="buy-upgrade">Купить (+1 Star/чекпоинт)</button>
+                <h4>Рефералы</h4>
+                <p>Поинты: <span id="referral-points">0</span></p>
+                <p>Разгон (на чекпоинт): <select id="boost-level-select">
+                    <option value="0">0 (+0%)</option>
+                    <option value="1">1 (+25%)</option>
+                    <option value="2">2 (+50%)</option>
+                    <option value="3">3 (+75%)</option>
+                    <option value="4">4 (+100%)</option>
+                </select></p>
+                <button id="apply-boost">Применить Разгон</button>
+                <p>+Уровень (от реферала lvl 1+): <input type="number" id="ref-level-boost" min="0" value="0" step="1"></p>
+                <button id="apply-ref-level">Применить +уровень</button>
             </div>
-            <button id="close-modal">Закрыть</button>
+            <div class="upgrade-section">
+                <h4>Выплаты</h4>
+                <p>Базово: 10 Stars/чекпоинт</p>
+                <p>Текущий бонус: +<span id="payout-bonus">0</span></p>
+                <p>Прокачать на +<input type="number" id="payout-increase" min="1" max="40" value="1" step="1"> (Стоимость: <span id="payout-cost">10</span> Stars)</p>
+                <button id="buy-payout">Купить</button>
+            </div>
+        </div>
+
+        <!-- Страница 4: Покупка слота -->
+        <div id="buy-page" class="page">
+            <h2>Покупка слота</h2>
+            <div id="ad-slots-detailed" class="slots-grid"></div>
+            <form id="buy-form">
+                <input type="text" id="channel-name" placeholder="Название канала" required>
+                <input type="url" id="channel-link" placeholder="Ссылка на канал (t.me/...)" required>
+                <select id="status-select">
+                    <option value="standard">Стандарт (1000 Stars/день)</option>
+                    <option value="vip">VIP (5000 Stars/день, приоритет)</option>
+                </select>
+                <select id="shows-select">
+                    <option value="100">100 показов</option>
+                    <!-- Динамически JS -->
+                </select>
+                <select id="period-select">
+                    <option value="1">1 день</option>
+                    <!-- Динамически JS -->
+                </select>
+                <p>Показы доступны: <span id="max-shows">100</span> (по пользователям)</p>
+                <p>Итого: <span id="total-cost">1000</span> Stars</p>
+                <button type="submit" class="btn-primary">Оплатить Stars</button>
+            </form>
+        </div>
+
+        <!-- Модальное окно информации -->
+        <div id="info-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Как работают слоты</h3>
+                <p>Подпишись на все — таймер зелёный, Stars капают. Отписка — красный, ×2 назад. Чекпоинты спасут прогресс! VIP всегда сверху.</p>
+                <button id="close-info">Закрыть</button>
+            </div>
+        </div>
+
+        <!-- Нижняя навигация -->
+        <div class="bottom-nav">
+            <button id="main-btn" class="nav-btn active">Главная</button>
+            <button id="subs-btn" class="nav-btn">Подписки</button>
+            <button id="upgrades-btn" class="nav-btn">Прокачка</button>
+            <button id="buy-btn" class="nav-btn">Купить слот</button>
         </div>
     </div>
-
-    <!-- Модалка Инфо -->
-    <div id="info-modal" class="modal hidden">
-        <div class="modal-content">
-            <h3>Как работают слоты</h3>
-            <p>Подпишись на все — таймер зелёный, Stars капают. Отписка — красный, ×2 назад. Чекпоинты спасут прогресс!</p>
-            <button id="close-info">Закрыть</button>
-        </div>
-    </div>
-
-    <!-- Страница Покупка слота -->
-    <div id="buy-page" class="page hidden">
-        <button id="back-buy" class="btn-back">← Назад</button>
-        <h2>Купить слот</h2>
-        <form id="buy-form">
-            <input type="text" id="channel-name" placeholder="Название канала" required>
-            <input type="url" id="channel-link" placeholder="Ссылка на канал" required>
-            <select id="status-select">
-                <option value="standard">Стандарт (1000 Stars/день)</option>
-                <option value="vip">VIP (100k Stars/месяц)</option>
-            </select>
-            <select id="period-select">
-                <option value="1">1 день</option>
-                <option value="30">30 дней</option>
-            </select>
-            <p>Показы: <span id="shows-estimate">~1000</span></p>
-            <p>Итого: <span id="total-cost">1000</span> Stars</p>
-            <button type="submit" class="btn-primary">Оплатить Stars</button>
-        </form>
-    </div>
-
-    <script src="script.js"></script>
+    <script src="/static/script.js"></script>.
 </body>
 </html>
