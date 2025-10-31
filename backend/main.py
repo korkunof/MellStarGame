@@ -35,7 +35,7 @@ async def start(update: Update, context: CallbackContext):
         if WEBHOOK_URL else "https://mellstar-game.vercel.app"
     )
 
-    keyboard = [[InlineKeyboardButton("🎮 Играть", web_app=WebAppInfo(url=web_url))]]
+    keyboard = [[InlineKeyboardButton("🎮 Играть", web_app=WebAppInfo(url=f"{os.getenv('FRONTEND_URL')}/index.html"))]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text(
