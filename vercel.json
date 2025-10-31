@@ -2,22 +2,18 @@
   "version": 2,
   "builds": [
     {
-      "src": "backend/main.py",
-      "use": "@vercel/python"
+      "src": "backend/frontend/index.html",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
     {
-      "src": "/webhook",
-      "dest": "/backend/main.py"
-    },
-    {
-      "src": "/static/(.*)",
-      "dest": "/backend/frontend/$1"
+      "src": "/api/(.*)",
+      "dest": "https://mellstar-backend.onrender.com/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/backend/main.py"
+      "dest": "/backend/frontend/$1"
     }
   ]
 }
