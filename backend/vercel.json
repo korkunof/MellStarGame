@@ -2,18 +2,22 @@
   "version": 2,
   "builds": [
     {
-      "src": "main.py",
+      "src": "backend/main.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
       "src": "/static/(.*)",
-      "dest": "/static/$1"
+      "dest": "/backend/static/$1"
+    },
+    {
+      "src": "/webhook",
+      "dest": "/backend/main.py"
     },
     {
       "src": "/(.*)",
-      "dest": "/main.py"
+      "dest": "/backend/main.py"
     }
   ]
 }
