@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # например: https://mellstar-backend.onrender.com/webhook
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g. https://mellstar-backend.onrender.com/webhook
+FRONTEND_URL = os.getenv("FRONTEND_URL")  # e.g. https://mell-star-game-git-main-korkunofs-projects.vercel.app
 
 if not BOT_TOKEN:
     logger.warning("⚠️ BOT_TOKEN не найден в .env — Telegram бот не будет инициализирован.")
@@ -25,26 +26,30 @@ if not BOT_TOKEN:
 else:
     application = Application.builder().token(BOT_TOKEN).build()
 
-
 # ===== ТЕЛЕГРАМ ХЭНДЛЕРЫ =====
 async def start(update: Update, context: CallbackContext):
-    logger.info(f"Получена команда /start от {update.effective_user.id}")
+    try:
+        user_id = update.effective_user.id if update.effective_user else "unknown"
+        logger.info(f"Получена команда /start от {user_id}")
+    except Exception:
+        logger.info("Получена команда /start")
 
-    web_url = (
-        f"{WEBHOOK_URL.rsplit('/', 1)[0]}/static/index.html"
-        if WEBHOOK_URL else "https://mellstar-game.vercel.app"
-    )
+    web_url = FRONTEND_URL or (f"{WEBHOOK_URL.rsplit('/', 1)[0]}/static/index.html" if WEBHOOK_URL else "")
+    if not web_url:
+        web_url = "https://mell-star-game-git-main-korkunofs-projects.vercel.app"
 
-    keyboard = [[InlineKeyboardButton("🎮 Играть", web_app=WebAppInfo(url=f"{os.getenv('FRONTEND_URL')}/index.html"))]]
+    keyboard = [[InlineKeyboardButton("🎮 Играть", web_app=WebAppInfo(url=f"{web_url}/index.html"))]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text(
-        "Привет! Это <b>MellStarGameBot</b>.\n"
-        "Нажми <b>Играть</b>, чтобы открыть игру 🚀",
+        "Привет! Это <b>MellStarGameBot</b>.\nНажми <b>Играть</b>, чтобы открыть игру 🚀",
         reply_markup=reply_markup,
         parse_mode=ParseMode.HTML
     )
 
+# Register handlers if application exists
+if application:
+    application.add_handler(CommandHandler("start", start))
 
 # ===== LIFESPAN =====
 @asynccontextmanager
@@ -62,14 +67,14 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.error(f"Ошибка при установке webhook: {e}")
     yield
+    # При нормальном завершении мы пытаемся аккуратно завершить application, но
+    # НЕ вызывать delete_webhook в продакшене автоматически, чтобы случайные завершения не снимали webhook.
     if application:
         try:
-            await application.bot.delete_webhook()
             await application.shutdown()
-            logger.info("🔻 Webhook удалён, бот остановлен.")
+            logger.info("🔻 Application shutdown complete.")
         except Exception as e:
-            logger.error(f"Ошибка при завершении: {e}")
-
+            logger.error(f"Ошибка при завершении application: {e}")
 
 # ===== FASTAPI APP =====
 app = FastAPI(lifespan=lifespan)
@@ -83,17 +88,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Статика
+# Статика — если есть папка backend/frontend
 frontend_path = os.path.join(os.path.dirname(__file__), "frontend")
 if os.path.exists(frontend_path):
     app.mount("/static", StaticFiles(directory=frontend_path, html=True), name="static")
-
 
 # ===== ROUTES =====
 @app.get("/")
 def home():
     return {"message": "✅ MellStarGameBot backend активен и готов!"}
-
 
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
@@ -105,12 +108,12 @@ async def telegram_webhook(request: Request):
         data = await request.json()
         logger.info(f"Получен update: {data}")
         update = Update.de_json(data, application.bot)
+        # Обработка апдейта — асинхронно
         await application.process_update(update)
         return {"status": "ok"}
     except Exception as e:
-        logger.error(f"Ошибка при обработке webhook: {e}")
+        logger.error(f"Ошибка при обработке webhook: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
-
 
 # ===== ПРОСТЫЕ ЭНДПОИНТЫ =====
 @app.get("/user/{user_id}")
@@ -124,15 +127,13 @@ async def get_user(user_id: int):
         "points": 0
     }
 
-
 @app.post("/user/{user_id}")
 async def save_user(user_id: int, data: dict):
     logger.info(f"POST /user/{user_id}: {data}")
     return {"status": "saved"}
 
-
 # ===== MAIN =====
 if __name__ == "__main__":
     import uvicorn
     logger.info("🚀 Локальный запуск FastAPI (без webhook)")
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 3000)))
