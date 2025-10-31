@@ -1,11 +1,11 @@
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackContext
 from dotenv import load_dotenv
 import os
-import asyncio
 import logging
 from telegram.constants import ParseMode
 
@@ -23,7 +23,40 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 if not WEBHOOK_URL:
     raise ValueError("WEBHOOK_URL не найден в .env")
 
-app = FastAPI()
+# Создаём приложение бота
+application = Application.builder().token(BOT_TOKEN).build()
+
+async def start(update: Update, context: CallbackContext):
+    logger.info(f"Получена команда /start от {update.effective_user.id}")
+    
+    # Кнопка для Web App
+    keyboard = [[InlineKeyboardButton("Играть", web_app=WebAppInfo(url=f"{WEBHOOK_URL.rsplit('/', 1)[0]}/static/index.html"))]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        "Привет! Это MellStarGameBot. Нажми 'Играть' для старта игры с таймером и Stars!",
+        reply_markup=reply_markup,
+        parse_mode=ParseMode.HTML
+    )
+
+# Добавляем хэндлер
+application.add_handler(CommandHandler("start", start))
+
+# Lifespan для startup/shutdown (замена @on_event, работает в Vercel)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await application.initialize()
+    await application.bot.set_webhook(WEBHOOK_URL)
+    logger.info(f"Webhook настроен на: {WEBHOOK_URL}")
+    info = await application.bot.get_webhook_info()
+    logger.info(f"Webhook info: url={info.url}, pending={info.pending_update_count}")
+    yield
+    # Shutdown
+    await application.bot.delete_webhook()
+    await application.shutdown()
+
+app = FastAPI(lifespan=lifespan)
 
 # CORS для фронта и TG
 app.add_middleware(
@@ -36,25 +69,6 @@ app.add_middleware(
 
 # Монтируем фронт на /static (directory="frontend" — создай папку в backend/)
 app.mount("/static", StaticFiles(directory="frontend", html=True), name="static")
-
-# Создаём приложение бота
-application = Application.builder().token(BOT_TOKEN).build()
-
-async def start(update: Update, context: CallbackContext):
-    logger.info(f"Получена команда /start от {update.effective_user.id}")
-    
-    # Кнопка для Web App
-    keyboard = [[InlineKeyboardButton("Играть", web_app=WebAppInfo(url="mell-star-game-38twg75-korkunof-projects.vercel.app"))]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(
-        "Привет! Это MellStarGameBot. Нажми 'Играть' для старта игры с таймером и Stars!",
-        reply_markup=reply_markup,
-        parse_mode=ParseMode.HTML
-    )
-
-# Добавляем хэндлер
-application.add_handler(CommandHandler("start", start))
 
 @app.get("/")
 def read_root():
@@ -123,18 +137,6 @@ async def webhook(request: Request):
         logger.error(f"Ошибка в webhook: {e}")
         return {"status": "error", "message": str(e)}, 500
 
-# Startup event для webhook setup (фикс event loop)
-@app.on_event("startup")
-async def startup_event():
-    try:
-        await application.initialize()
-        await application.bot.set_webhook(WEBHOOK_URL)
-        logger.info(f"Webhook настроен на: {WEBHOOK_URL}")
-        info = await application.bot.get_webhook_info()
-        logger.info(f"Webhook info: url={info.url}, pending={info.pending_update_count}")
-    except Exception as e:
-        logger.error(f"Ошибка startup: {e}")
-
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=3000)
