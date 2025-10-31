@@ -9,56 +9,72 @@ import os
 import logging
 from telegram.constants import ParseMode
 
-# Настраиваем логирование для дебага
+# ===== ЛОГИ =====
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ===== ЗАГРУЗКА ПЕРЕМЕННЫХ =====
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # например: https://mellstar-backend.onrender.com/webhook
+
 if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN не найден в .env")
+    logger.warning("⚠️ BOT_TOKEN не найден в .env — Telegram бот не будет инициализирован.")
+    application = None
+else:
+    application = Application.builder().token(BOT_TOKEN).build()
 
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-if not WEBHOOK_URL:
-    raise ValueError("WEBHOOK_URL не найден в .env")
 
-# Создаём приложение бота
-application = Application.builder().token(BOT_TOKEN).build()
-
+# ===== ТЕЛЕГРАМ ХЭНДЛЕРЫ =====
 async def start(update: Update, context: CallbackContext):
     logger.info(f"Получена команда /start от {update.effective_user.id}")
-    
-    # Кнопка для Web App
-    keyboard = [[InlineKeyboardButton("Играть", web_app=WebAppInfo(url=f"{WEBHOOK_URL.rsplit('/', 1)[0]}/static/index.html"))]]
+
+    web_url = (
+        f"{WEBHOOK_URL.rsplit('/', 1)[0]}/static/index.html"
+        if WEBHOOK_URL else "https://mellstar-game.vercel.app"
+    )
+
+    keyboard = [[InlineKeyboardButton("🎮 Играть", web_app=WebAppInfo(url=web_url))]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     await update.message.reply_text(
-        "Привет! Это MellStarGameBot. Нажми 'Играть' для старта игры с таймером и Stars!",
+        "Привет! Это <b>MellStarGameBot</b>.\n"
+        "Нажми <b>Играть</b>, чтобы открыть игру 🚀",
         reply_markup=reply_markup,
         parse_mode=ParseMode.HTML
     )
 
-# Добавляем хэндлер
-application.add_handler(CommandHandler("start", start))
 
-# Lifespan для startup/shutdown (замена @on_event, работает в Vercel)
+# ===== LIFESPAN =====
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    await application.initialize()
-    await application.bot.set_webhook(WEBHOOK_URL)
-    logger.info(f"Webhook настроен на: {WEBHOOK_URL}")
-    info = await application.bot.get_webhook_info()
-    logger.info(f"Webhook info: url={info.url}, pending={info.pending_update_count}")
-    yield
-    # Shutdown
-    await application.bot.delete_webhook()
-    await application.shutdown()
+    if application:
+        await application.initialize()
 
+        # Устанавливаем webhook только если задан URL (чтобы не падало локально)
+        if WEBHOOK_URL:
+            try:
+                await application.bot.set_webhook(WEBHOOK_URL)
+                logger.info(f"✅ Webhook установлен: {WEBHOOK_URL}")
+                info = await application.bot.get_webhook_info()
+                logger.info(f"Webhook info: url={info.url}, pending={info.pending_update_count}")
+            except Exception as e:
+                logger.error(f"Ошибка при установке webhook: {e}")
+    yield
+    if application:
+        try:
+            await application.bot.delete_webhook()
+            await application.shutdown()
+            logger.info("🔻 Webhook удалён, бот остановлен.")
+        except Exception as e:
+            logger.error(f"Ошибка при завершении: {e}")
+
+
+# ===== FASTAPI APP =====
 app = FastAPI(lifespan=lifespan)
 
-# CORS для фронта и TG
+# CORS для фронта и Telegram
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -67,76 +83,56 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Монтируем фронт на /static (directory="frontend" — создай папку в backend/)
-app.mount("/static", StaticFiles(directory="frontend", html=True), name="static")
+# Статика
+frontend_path = os.path.join(os.path.dirname(__file__), "frontend")
+if os.path.exists(frontend_path):
+    app.mount("/static", StaticFiles(directory=frontend_path, html=True), name="static")
 
+
+# ===== ROUTES =====
 @app.get("/")
-def read_root():
-    return {"message": "Сервер MellStarGameBot готов!"}
+def home():
+    return {"message": "✅ MellStarGameBot backend активен и готов!"}
 
-# Эндпоинт для пользователя (заглушка, возвращает default data, позже DB)
+
+@app.post("/webhook")
+async def telegram_webhook(request: Request):
+    if not application:
+        logger.warning("⚠️ Webhook вызван, но бот не инициализирован (нет BOT_TOKEN).")
+        return {"status": "no bot"}
+
+    try:
+        data = await request.json()
+        logger.info(f"Получен update: {data}")
+        update = Update.de_json(data, application.bot)
+        await application.process_update(update)
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Ошибка при обработке webhook: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+# ===== ПРОСТЫЕ ЭНДПОИНТЫ =====
 @app.get("/user/{user_id}")
 async def get_user(user_id: int):
     logger.info(f"GET /user/{user_id}")
     return {
-        "slots": [{"name": "Слот пустой", "status": "empty", "link": "", "logo": ""} for _ in range(5)],
+        "userId": user_id,
+        "slots": [{"name": "Пусто", "status": "empty"} for _ in range(5)],
         "progress": 0,
         "level": 1,
-        "points": 0,
-        "allocatedPoints": 0,
-        "referralPoints": 0,
-        "boostLevel": 0,
-        "refLevelBonus": 0,
-        "payoutBonus": 0,
-        "adSlots": [],
-        "totalUsers": 100
+        "points": 0
     }
 
-# POST для сохранения пользователя (заглушка, логирует, позже DB)
+
 @app.post("/user/{user_id}")
-async def post_user(user_id: int, data: dict):
+async def save_user(user_id: int, data: dict):
     logger.info(f"POST /user/{user_id}: {data}")
     return {"status": "saved"}
 
-# Заглушки для других эндпоинтов
-@app.post("/buy-slot")
-async def buy_slot(data: dict):
-    logger.info(f"POST /buy-slot: {data}")
-    return {"status": "bought"}
 
-@app.get("/verify-sub/{user_id}/{link}")
-async def verify_sub(user_id: int, link: str):
-    logger.info(f"GET /verify-sub/{user_id}/{link}")
-    return {"verified": True}  # Заглушка (true for test, later getChatMember)
-
-@app.get("/total-users")
-async def total_users():
-    return {"totalUsers": 100}
-
-@app.post("/payout/{user_id}/{amount}")
-async def payout(user_id: int, amount: int):
-    logger.info(f"POST /payout/{user_id}/{amount}")
-    return {"status": "paid"}
-
-@app.post("/webhook")
-async def webhook(request: Request):
-    try:
-        # Логируем входящий запрос для дебага
-        json_data = await request.json()
-        logger.info(f"Получен webhook update: {json_data}")
-        
-        update = Update.de_json(json_data, application.bot)
-        if update:
-            logger.info(f"Обработка update: {update.update_id}")
-            await application.process_update(update)
-        else:
-            logger.warning("Не удалось распарсить update")
-        
-        return {"status": "ok"}
-    except Exception as e:
-        logger.error(f"Ошибка в webhook: {e}")
-        return {"status": "error", "message": str(e)}, 500
-
+# ===== MAIN =====
 if __name__ == "__main__":
     import uvicorn
+    logger.info("🚀 Локальный запуск FastAPI (без webhook)")
     uvicorn.run(app, host="0.0.0.0", port=3000)
