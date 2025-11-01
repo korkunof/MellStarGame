@@ -2,18 +2,33 @@
   "version": 2,
   "builds": [
     {
-      "src": "backend/frontend/index.html",
-      "use": "@vercel/static"
+      "src": "backend/main.py",
+      "use": "@vercel/python"
     }
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "https://mellstar-backend.onrender.com/$1"
+      "src": "/webhook",
+      "dest": "/backend/main.py"
+    },
+    {
+      "src": "/static/(.*)",
+      "dest": "/backend/frontend/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/backend/frontend/$1"
+      "dest": "/backend/main.py"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "ALLOWALL" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+      ]
     }
   ]
 }
