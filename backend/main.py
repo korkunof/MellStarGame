@@ -13,32 +13,30 @@ from telegram.constants import ParseMode
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ===== ЗАГРУЗКА ПЕРЕМЕННЫХ =====
+# ===== ЗАГРУЗКА .ENV =====
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g. https://mellstar-backend.onrender.com/webhook
-FRONTEND_URL = os.getenv("FRONTEND_URL")  # e.g. https://mell-star-game-git-main-korkunofs-projects.vercel.app
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # например: https://mellstar-backend.onrender.com/webhook
+FRONTEND_URL = os.getenv("FRONTEND_URL")  # например: https://mell-star-game.vercel.app
 
-if not BOT_TOKEN:
-    logger.warning("⚠️ BOT_TOKEN не найден в .env — Telegram бот не будет инициализирован.")
-    application = None
-else:
+# ===== ИНИЦИАЛИЗАЦИЯ БОТА =====
+application = None
+if BOT_TOKEN:
     application = Application.builder().token(BOT_TOKEN).build()
+else:
+    logger.warning("⚠️ BOT_TOKEN не найден в .env — бот не будет активирован.")
 
-# ===== ТЕЛЕГРАМ ХЭНДЛЕРЫ =====
+# ===== ХЭНДЛЕР /start =====
 async def start(update: Update, context: CallbackContext):
-    try:
-        user_id = update.effective_user.id if update.effective_user else "unknown"
-        logger.info(f"Получена команда /start от {user_id}")
-    except Exception:
-        logger.info("Получена команда /start")
+    user_id = update.effective_user.id if update.effective_user else "unknown"
+    logger.info(f"Получена команда /start от {user_id}")
 
     web_url = FRONTEND_URL or (f"{WEBHOOK_URL.rsplit('/', 1)[0]}/static/index.html" if WEBHOOK_URL else "")
     if not web_url:
-        web_url = "https://mell-star-game-git-main-korkunofs-projects.vercel.app"
+        web_url = "https://example.vercel.app/static/index.html"
 
-    keyboard = [[InlineKeyboardButton("🎮 Играть", web_app=WebAppInfo(url=f"{web_url}/index.html"))]]
+    keyboard = [[InlineKeyboardButton("🎮 Играть", web_app=WebAppInfo(url=web_url))]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text(
@@ -47,39 +45,32 @@ async def start(update: Update, context: CallbackContext):
         parse_mode=ParseMode.HTML
     )
 
-# Register handlers if application exists
 if application:
     application.add_handler(CommandHandler("start", start))
 
-# ===== LIFESPAN =====
+# ===== ЖИЗНЕННЫЙ ЦИКЛ =====
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if application:
         await application.initialize()
-
-        # Устанавливаем webhook только если задан URL (чтобы не падало локально)
         if WEBHOOK_URL:
             try:
                 await application.bot.set_webhook(WEBHOOK_URL)
                 logger.info(f"✅ Webhook установлен: {WEBHOOK_URL}")
-                info = await application.bot.get_webhook_info()
-                logger.info(f"Webhook info: url={info.url}, pending={info.pending_update_count}")
             except Exception as e:
-                logger.error(f"Ошибка при установке webhook: {e}")
+                logger.error(f"Ошибка установки webhook: {e}")
     yield
-    # При нормальном завершении мы пытаемся аккуратно завершить application, но
-    # НЕ вызывать delete_webhook в продакшене автоматически, чтобы случайные завершения не снимали webhook.
     if application:
         try:
             await application.shutdown()
-            logger.info("🔻 Application shutdown complete.")
+            logger.info("🔻 Application завершён корректно.")
         except Exception as e:
             logger.error(f"Ошибка при завершении application: {e}")
 
-# ===== FASTAPI APP =====
+# ===== FASTAPI =====
 app = FastAPI(lifespan=lifespan)
 
-# CORS для фронта и Telegram
+# Разрешаем CORS для Telegram WebApp
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -88,10 +79,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Статика — если есть папка backend/frontend
-frontend_path = os.path.join(os.path.dirname(__file__), "frontend")
-if os.path.exists(frontend_path):
-    app.mount("/static", StaticFiles(directory=frontend_path, html=True), name="static")
+# ===== МОНТИРУЕМ СТАТИКУ =====
+static_path = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_path):
+    app.mount("/static", StaticFiles(directory=static_path, html=True), name="static")
+    logger.info(f"📁 Статика подключена: {static_path}")
+else:
+    logger.warning("⚠️ Папка static не найдена!")
 
 # ===== ROUTES =====
 @app.get("/")
@@ -101,21 +95,16 @@ def home():
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
     if not application:
-        logger.warning("⚠️ Webhook вызван, но бот не инициализирован (нет BOT_TOKEN).")
         return {"status": "no bot"}
-
     try:
         data = await request.json()
-        logger.info(f"Получен update: {data}")
         update = Update.de_json(data, application.bot)
-        # Обработка апдейта — асинхронно
         await application.process_update(update)
         return {"status": "ok"}
     except Exception as e:
-        logger.error(f"Ошибка при обработке webhook: {e}", exc_info=True)
+        logger.error(f"Ошибка при webhook: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
 
-# ===== ПРОСТЫЕ ЭНДПОИНТЫ =====
 @app.get("/user/{user_id}")
 async def get_user(user_id: int):
     logger.info(f"GET /user/{user_id}")
@@ -132,7 +121,7 @@ async def save_user(user_id: int, data: dict):
     logger.info(f"POST /user/{user_id}: {data}")
     return {"status": "saved"}
 
-# ===== MAIN =====
+# ===== ЛОКАЛЬНЫЙ ЗАПУСК =====
 if __name__ == "__main__":
     import uvicorn
     logger.info("🚀 Локальный запуск FastAPI (без webhook)")
