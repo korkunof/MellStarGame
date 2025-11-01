@@ -4,27 +4,31 @@
     {
       "src": "backend/main.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "backend/static/**/*",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
     {
       "src": "/webhook",
-      "dest": "/backend/main.py"
+      "dest": "backend/main.py"
     },
     {
       "src": "/static/(.*)",
-      "dest": "/backend/frontend/$1"
+      "dest": "backend/static/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/backend/main.py"
+      "dest": "backend/main.py"
     }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Frame-Options", "value": "ALLOWALL" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
