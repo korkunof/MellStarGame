@@ -1,12 +1,11 @@
 {
   "version": 2,
   "builds": [
-    { "src": "backend/main.py", "use": "@vercel/python" },
-    { "src": "backend/static/**/*", "use": "@vercel/static" }
+    { "src": "backend/main.py", "use": "@vercel/python" }
   ],
   "routes": [
     { "src": "/webhook", "dest": "backend/main.py" },
-    { "src": "/static/(.*)", "dest": "backend/static/$1" },
+
     { "src": "/(.*)", "dest": "backend/main.py" }
   ],
   "headers": [
