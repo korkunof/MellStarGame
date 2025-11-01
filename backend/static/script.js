@@ -1,67 +1,97 @@
-const tg = window.Telegram?.WebApp || {};
-tg.ready?.();
-
-let user = {
-  id: 1,
-  name: "Пользователь",
-  level: 1,
-  points: 3,
-  referrals: 2,
-  payoutBonus: 0,
-  progress: 2,
-  slots: [
-    { name: "Канал A", link: "#", status: "verified" },
-    { name: "Канал B", link: "#", status: "pending" },
-    { name: "Слот пустой", status: "empty" },
-  ]
-};
+// Telegram API подключение
+let tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.expand();
+}
 
 // Навигация
-document.getElementById("main-btn").onclick = () => switchPage("main");
-document.getElementById("subs-btn").onclick = () => switchPage("subscriptions");
-document.getElementById("upgrades-btn").onclick = () => switchPage("upgrades");
+const navBtns = document.querySelectorAll(".nav-btn");
+const pages = document.querySelectorAll(".page");
 
-function switchPage(page) {
-  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
-  document.getElementById(`${page}-page`).classList.add("active");
-  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
-  document.getElementById(`${page}-btn`).classList.add("active");
-}
-
-// Главная
-function renderMain() {
-  document.getElementById("user-name").textContent = user.name;
-  document.getElementById("level-display").textContent = user.level;
-  document.getElementById("points").textContent = user.points;
-  document.getElementById("referrals-count").textContent = user.referrals;
-  document.getElementById("payout-bonus").textContent = user.payoutBonus;
-}
-renderMain();
-
-// Подписки
-function renderSubscriptions() {
-  const cont = document.getElementById("slots-container");
-  cont.innerHTML = "";
-  user.slots.forEach(slot => {
-    const div = document.createElement("div");
-    div.className = `slot-card ${slot.status}`;
-    div.innerHTML = `<h4>${slot.name}</h4><p>${slot.status}</p>`;
-    cont.appendChild(div);
+navBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    navBtns.forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    pages.forEach((p) => p.classList.remove("active"));
+    document.getElementById(btn.dataset.target).classList.add("active");
   });
+});
 
-  document.getElementById("progress-fill").style.width = `${(user.progress / 5) * 100}%`;
-  document.getElementById("progress-text").textContent = `${user.progress}/5 чекпоинтов`;
+// Данные пользователя (заглушка)
+let user = {
+  name: tg?.initDataUnsafe?.user?.first_name || "Гость",
+  level: 1,
+  points: 5,
+  referrals: 0,
+  balance: 120,
+};
+
+// Отображение имени и статистики
+document.getElementById("username").textContent = user.name;
+document.getElementById("level").textContent = user.level;
+document.getElementById("points").textContent = user.points;
+document.getElementById("referrals").textContent = user.referrals;
+document.getElementById("balance").textContent = user.balance;
+
+// --- СЛОТЫ ---
+const slotsPanel = document.getElementById("slotsPanel");
+const subsContainer = document.getElementById("subsContainer");
+
+function createSlotCard(slot, isEmpty = false) {
+  const div = document.createElement("div");
+  div.className = "slot-card" + (isEmpty ? " empty" : "");
+  div.innerHTML = isEmpty
+    ? `<span>Слот свободен</span>`
+    : `<span>${slot.title}</span><strong>${slot.status}</strong>`;
+  return div;
 }
-renderSubscriptions();
 
-// Прокачка
-document.getElementById("apply-slots").onclick = () => alert("Заглушка: Слот добавлен!");
-document.getElementById("apply-boost").onclick = () => alert("Заглушка: Разгон применён!");
-document.getElementById("buy-payout").onclick = () => alert("Заглушка: Покупка улучшения!");
+// Главная статистика рекламных слотов
+const slotsData = [
+  { title: "Канал A", status: "Активен" },
+  { title: "Канал B", status: "Завершён" },
+];
+slotsData.forEach((slot) => slotsPanel.appendChild(createSlotCard(slot)));
+for (let i = slotsData.length; i < 3; i++) {
+  slotsPanel.appendChild(createSlotCard(null, true));
+}
 
-// Модальное окно
-document.getElementById("info-btn").onclick = () => document.getElementById("info-modal").classList.remove("hidden");
-document.getElementById("close-info").onclick = () => document.getElementById("info-modal").classList.add("hidden");
+// Подписки (всегда 5 слотов)
+for (let i = 0; i < 5; i++) {
+  subsContainer.appendChild(createSlotCard(null, true));
+}
 
-// Кнопка приглашения
-document.getElementById("invite-btn").onclick = () => alert("Заглушка: Ссылка для друга создана!");
+// --- ПРОКАЧКА ---
+const freePointsEl = document.getElementById("freePoints");
+document.querySelectorAll(".btn-upgrade").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (user.points <= 0) return tg?.showAlert?.("Нет очков для прокачки");
+    user.points--;
+    freePointsEl.textContent = user.points;
+    btn.textContent = "✅ Прокачано";
+    btn.disabled = true;
+    setTimeout(() => (btn.textContent = "+ Прокачать", btn.disabled = false), 3000);
+  });
+});
+
+// --- ПОКУПКА СЛОТОВ ---
+const slotType = document.getElementById("slotType");
+const slotViews = document.getElementById("slotViews");
+const slotDays = document.getElementById("slotDays");
+const slotTotal = document.getElementById("slotTotal");
+
+function updateTotal() {
+  const base = slotType.value === "vip" ? 5000 : 1000;
+  const views = parseInt(slotViews.value);
+  const days = parseInt(slotDays.value);
+  const total = base * days + views * 0.2 * days;
+  slotTotal.textContent = total.toFixed(0);
+}
+[slotType, slotViews, slotDays].forEach((el) =>
+  el.addEventListener("input", updateTotal)
+);
+updateTotal();
+
+document.getElementById("buyBtn").addEventListener("click", () => {
+  tg?.showAlert?.(`Слот куплен на ${slotDays.value} дн. за ${slotTotal.textContent}⭐`);
+});
