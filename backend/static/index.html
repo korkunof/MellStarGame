@@ -3,97 +3,163 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MellStar Game</title>
+  <title>MellStarGame</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <main id="app">
+  <div class="container">
 
-    <!-- ЛИЧНЫЙ КАБИНЕТ -->
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">MellStarGame</div>
+      <p class="welcome">Удерживай таймер — получай звёзды. Возможность заработать каждому.</p>
+    </header>
+
+    <!-- ГЛАВНАЯ -->
     <section id="home" class="page active">
-      <h1>Привет, <span id="username">Пользователь</span> 👋</h1>
-      <div class="stats-panel">
-        <div class="stat"><span>⭐ Уровень:</span><strong id="level">1</strong></div>
-        <div class="stat"><span>⚙️ Очки:</span><strong id="points">0</strong></div>
-        <div class="stat"><span>👥 Рефералы:</span><strong id="referrals">0</strong></div>
-        <div class="stat"><span>💎 Баланс:</span><strong id="balance">0</strong></div>
+      <h1 class="greeting">Привет, <span id="username">Гость</span>!</h1>
+      <p class="subtitle">Твоя панель управления</p>
+
+      <div class="stats-grid">
+        <!-- Уровень -->
+        <div class="stat-card">
+          <div class="question" data-tip="Чем выше — тем быстрее таймер и больше звёзд"></div>
+          <div class="label">Уровень</div>
+          <div class="value" id="level">1</div>
+        </div>
+
+        <!-- Очки -->
+        <div class="stat-card">
+          <div class="question" data-tip="Очки за уровень: прокачка. Рефералы: 4 очка = x2 буст"></div>
+          <div class="label">Очки уровня</div>
+          <div class="value neon" id="freePoints">0</div>
+          <div class="label sub">Рефералы</div>
+          <div class="value" id="refPoints">0</div>
+        </div>
+
+        <!-- Слоты -->
+        <div class="stat-card">
+          <div class="question" data-tip="Активные слоты = +24ч. Следи за окончанием!"></div>
+          <div class="label">Слоты</div>
+          <div class="value" id="activeSlots">0 / 0</div>
+          <div class="sub-text">Ближайший: <strong id="nextSlotTime">-</strong></div>
+        </div>
+
+        <!-- Звёзды -->
+        <div class="stat-card">
+          <div class="question" data-tip="Звёзды за чекпоинт. Ускорение таймера: макс. -5 сек/тик"></div>
+          <div class="label">Звёзды</div>
+          <div class="value gold" id="payoutPer">10</div>
+          <div class="sub-text">Таймер: <strong id="timerSpeed">1,000 сек.</strong></div>
+        </div>
       </div>
 
-      <h2>Рекламные слоты</h2>
-      <div id="slotsPanel" class="slots-panel"></div>
+      <button class="buy-slot">Купить слот</button>
     </section>
 
     <!-- ПОДПИСКИ -->
     <section id="subscriptions" class="page">
-      <h1>Подписки</h1>
-      <div id="subsContainer" class="slots-panel"></div>
+      <div class="subs-controls">
+        <button id="inviteBtn" class="btn-neon">Пригласить друга</button>
+        <button id="infoBtn" class="btn-neon">Инфо</button>
+      </div>
+
+      <div id="timerBox" class="timer-box">
+        <div class="timer-label">Таймер:</div>
+        <div id="timerDisplay" class="timer-display">00:00:00</div>
+      </div>
+
+      <div class="progress-section">
+        <div class="progress-label">Прогресс к чекпоинту</div>
+        <div class="progress-bar">
+          <div id="progressFill" class="progress-fill"></div>
+          <div class="checkpoints">
+            <div class="checkpoint" data-time="0ч"></div>
+            <div class="checkpoint" data-time="24ч"></div>
+            <div class="checkpoint" data-time="48ч"></div>
+            <div class="checkpoint" data-time="72ч"></div>
+          </div>
+        </div>
+        <div class="progress-text" id="progressText">0 / 96 часов</div>
+      </div>
+
+      <div id="slotsContainer" class="slots-grid"></div>
     </section>
 
     <!-- ПРОКАЧКА -->
     <section id="upgrade" class="page">
-      <h1>Прокачка аккаунта</h1>
-      <div class="upgrade-info">
-        <div class="upgrade-header">
-          <span>Свободные очки: <strong id="freePoints">5</strong></span>
+      <h2 class="section-title">Прокачка аккаунта</h2>
+      <div class="points-counter">Свободно очков: <strong class="neon" id="pointsCounter">0</strong></div>
+
+      <div class="upgrade-tree">
+        <div class="upgrade-branch">
+          <h3>Скорость и слоты</h3>
+          <p>Уровень: <span id="currLevel">1</span> → <input type="number" id="levelInput" min="1" max="45" value="1" /> <button id="applyLevel" class="btn-upgrade">Применить</button></p>
+          <p class="info">Каждый уровень: +1 слот, +0.088 сек/тик</p>
         </div>
 
-        <div class="upgrade-tree">
-          <div class="upgrade-item">
-            <h3>⚡ Уровень и скорость</h3>
-            <p>+0.088 сек ускорения таймера за каждый уровень. Всего 45 уровней.</p>
-            <button class="btn-upgrade" data-upgrade="speed">+ Прокачать</button>
-          </div>
+        <div class="upgrade-branch">
+          <h3>Разгон (рефералы)</h3>
+          <p>Поинты: <span id="refPointsDisplay">0</span></p>
+          <p>Уровень: <span id="boostLevel">0</span>/4 (+<span id="boostPercent">0</span>%)</p>
+          <button id="applyBoost" class="btn-upgrade">+1 Разгон (4 поинта)</button>
+        </div>
 
-          <div class="upgrade-item">
-            <h3>🚀 Разгон (рефералы)</h3>
-            <p>+25% к скорости за каждого приглашённого (до x2).</p>
-            <button class="btn-upgrade" data-upgrade="ref">+ Прокачать</button>
-          </div>
-
-          <div class="upgrade-item">
-            <h3>💰 Выплаты</h3>
-            <p>Увеличение звёзд за чекпоинт. Стоимость растёт по мере улучшения.</p>
-            <button class="btn-upgrade" data-upgrade="income">+ Прокачать</button>
-          </div>
+        <div class="upgrade-branch">
+          <h3>Выплаты</h3>
+          <p>За чекпоинт: <span id="payoutPer">10</span> звёзд</p>
+          <p>Прокачать на: <input type="number" id="payoutAdd" min="1" value="1" /> (Стоимость: <span id="payoutCost">10</span> звёзд)</p>
+          <button id="buyPayout" class="btn-upgrade">Купить</button>
         </div>
       </div>
     </section>
 
-    <!-- ПОКУПКА СЛОТОВ -->
-    <section id="buySlot" class="page">
-      <h1>Купить слот</h1>
+    <!-- ПОКУПКА СЛОТА -->
+    <section id="buy" class="page">
+      <h2 class="section-title">Купить рекламный слот</h2>
+
+      <div id="myAdSlots" class="slots-list"></div>
 
       <div class="buy-form">
-        <label>Тип слота:
-          <select id="slotType">
-            <option value="standard">Standard (1000⭐/день)</option>
-            <option value="vip">VIP (5000⭐/день)</option>
+        <label>Тип: 
+          <select id="slotQuality">
+            <option value="standard">Стандарт (1000 звёзд/день)</option>
+            <option value="vip">VIP (5000 звёзд/день)</option>
           </select>
         </label>
-
-        <label>Показов:
-          <input id="slotViews" type="number" min="100" step="100" value="100" />
+        <label>Показов: 
+          <select id="slotShows"></select>
         </label>
-
-        <label>Дней:
-          <input id="slotDays" type="number" min="1" max="30" value="1" />
+        <label>Дней: 
+          <input type="number" id="slotDays" min="1" max="30" value="1" />
         </label>
-
-        <div class="total">
-          Итог: <strong id="slotTotal">0</strong> ⭐
-        </div>
-
-        <button id="buyBtn" class="btn-primary">Купить слот</button>
+        <div class="total-cost">Итого: <strong id="totalCost">1000</strong> звёзд</div>
+        <button id="buySlotBtn" class="btn-primary">Купить слот</button>
       </div>
     </section>
-  </main>
 
-  <!-- Нижнее меню -->
+  </div>
+
+  <!-- НИЖНЕЕ МЕНЮ — без дублирования -->
   <nav class="bottom-nav">
-    <button class="nav-btn active" data-target="home">🏠</button>
-    <button class="nav-btn" data-target="subscriptions">📋</button>
-    <button class="nav-btn" data-target="upgrade">⚙️</button>
-    <button class="nav-btn" data-target="buySlot">🛒</button>
+    <button data-page="home" class="nav-item active">
+      <span class="icon">Главная</span>
+      <span class="label">Главная</span>
+    </button>
+    <button data-page="subscriptions" class="nav-item">
+      <span class="icon">Подписки</span>
+      <span class="label">Подписки</span>
+    </button>
+    <button data-page="upgrade" class="nav-item">
+      <span class="icon">Прокачка</span>
+      <span class="label">Прокачка</span>
+    </button>
+    <button data-page="buy" class="nav-item">
+      <span class="icon">Купить</span>
+      <span class="label">Купить</span>
+    </button>
   </nav>
 
   <script src="script.js"></script>
