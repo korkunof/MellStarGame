@@ -1,16 +1,10 @@
-﻿// ===================================
-// [ИНИЦИАЛИЗАЦИЯ TELEGRAM WEB APP]
-// ===================================
 const tg = window.Telegram.WebApp;
-tg.ready(); 
-tg.expand();
+tg.ready(); tg.expand();
 
 const username = tg.initDataUnsafe?.user?.first_name || "Гость";
 document.getElementById("username").textContent = username;
 
-// ===================================
-// [ДАННЫЕ ПОЛЬЗОВАТЕЛЯ]
-// ===================================
+// === ДАННЫЕ ===
 let user = {
   level: 1,
   freePoints: 0,
@@ -26,26 +20,17 @@ let user = {
 
 const payoutCosts = [10,11,13,17,24,36,58,98,127,166,215,280,364,473,615,677,744,819,860,903,948,995,1045,1066,1087,1109,1131,1154,1177,1188,1200,1212,1224,1237,1249,1261,1274,1287,1300];
 
-// ===================================
-// [НАВИГАЦИЯ]
-// ===================================
+// === НАВИГАЦИЯ ===
 document.querySelectorAll(".nav-item").forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
     document.getElementById(btn.dataset.page).classList.add("active");
-    
-    // Обновляем главную при переключении на неё
-    if (btn.dataset.page === "home") {
-      updateMain();
-    }
   };
 });
 
-// ===================================
-// [ГЛАВНАЯ] — ОБНОВЛЕНИЕ СТАТИСТИКИ
-// ===================================
+// === ГЛАВНАЯ ===
 function updateMain() {
   document.getElementById("level").textContent = user.level;
   document.getElementById("freePoints").textContent = user.freePoints;
@@ -65,78 +50,10 @@ function updateMain() {
   document.getElementById("payoutPer").textContent = 10 + user.payoutBonus;
   const speed = 1 + (user.level - 1) * 0.088 + user.boostLevel * 0.25;
   document.getElementById("timerSpeed").textContent = `${speed.toFixed(3).replace('.', ',')} сек.`;
-
-  // Обновляем купленные слоты
-  renderAdSlots();
 }
 updateMain();
 
-// ===================================
-// [ОТРИСОВКА КУПЛЕННЫХ СЛОТОВ]
-// ===================================
-function renderAdSlots() {
-  const cont = document.getElementById("adSlotsContainer");
-  cont.innerHTML = "";
-
-  if (user.adSlots.length === 0) {
-    const div = document.createElement("div");
-    div.className = "slot-card empty";
-    div.textContent = "Нет купленных слотов";
-    cont.appendChild(div);
-    return;
-  }
-
-  const oneDayMs = 24 * 60 * 60 * 1000;
-  user.adSlots.forEach(slot => {
-    const div = document.createElement("div");
-    div.className = "slot-card active";
-
-    const daysLeft = slot.daysLeft || 0;
-    const timeLeft = daysLeft > 0 ? formatTimeLeft(daysLeft * oneDayMs) : "истёк";
-
-    div.innerHTML = `
-      <div>
-        <strong>${slot.name || "Без имени"}</strong><br>
-        <small>Подписчиков: ${slot.showsLeft || 0}</small><br>
-        <small>Осталось: ${timeLeft}</small>
-      </div>
-    `;
-    cont.appendChild(div);
-  });
-}
-
-// ===================================
-// [ЧЕКБОКСЫ СВОРАЧИВАНИЯ]
-// ===================================
-document.getElementById("collapseStats").addEventListener("change", function() {
-  const container = document.getElementById("statsContainer");
-  if (this.checked) {
-    container.classList.remove("collapsed");
-  } else {
-    container.classList.add("collapsed");
-  }
-});
-
-document.getElementById("collapseAdSlots").addEventListener("change", function() {
-  const container = document.getElementById("adSlotsContainer");
-  if (this.checked) {
-    container.classList.remove("collapsed");
-  } else {
-    container.classList.add("collapsed");
-  }
-});
-
-// Инициализация: если чекбоксы уже сняты — применить класс
-if (!document.getElementById("collapseStats").checked) {
-  document.getElementById("statsContainer").classList.add("collapsed");
-}
-if (!document.getElementById("collapseAdSlots").checked) {
-  document.getElementById("adSlotsContainer").classList.add("collapsed");
-}
-
-// ===================================
-// [СТРАНИЦА ПОДПИСОК]
-// ===================================
+// === ПОДПИСКИ ===
 function renderSubs() {
   const cont = document.getElementById("slotsContainer");
   cont.innerHTML = "";
@@ -183,9 +100,7 @@ function startTimer() {
   }, 500);
 }
 
-// ===================================
-// [ПРОКАЧКА]
-// ===================================
+// === ПРОКАЧКА ===
 function updateUpgrade() {
   document.getElementById("pointsCounter").textContent = user.freePoints;
   document.getElementById("currLevel").textContent = user.level;
@@ -226,9 +141,7 @@ document.getElementById("buyPayout").onclick = () => {
   updateMain(); updateUpgrade();
 };
 
-// ===================================
-// [ПОКУПКА СЛОТА]
-// ===================================
+// === ПОКУПКА СЛОТА ===
 const showsSelect = document.getElementById("slotShows");
 const showsOptions = [100,250,500,1000,3000,5000,10000,20000,50000,100000];
 showsOptions.forEach(s => {
@@ -253,18 +166,11 @@ document.getElementById("buySlotBtn").onclick = () => {
   if (user.balance < cost) return alert("Недостаточно звёзд");
   user.balance -= cost;
   const name = prompt("Название канала:");
-  if (!name) return;
-  user.adSlots.push({ 
-    name, 
-    showsLeft: parseInt(document.getElementById("slotShows").value), 
-    daysLeft: parseInt(document.getElementById("slotDays").value) 
-  });
-  updateMain(); // ← обновляем главную
+  user.adSlots.push({ name, showsLeft: parseInt(document.getElementById("slotShows").value), daysLeft: parseInt(document.getElementById("slotDays").value) });
+  updateMain();
 };
 
-// ===================================
-// [УТИЛИТЫ]
-// ===================================
+// === УТИЛИТЫ ===
 function formatTimeLeft(ms) {
   if (ms <= 0) return "истёк";
   const h = Math.floor(ms / 3600000);
@@ -272,7 +178,7 @@ function formatTimeLeft(ms) {
   return `${h}ч ${m}м`;
 }
 
-// КНОПКИ
+// Кнопки
 document.getElementById("inviteBtn").onclick = () => {
   const link = `https://t.me/MellStarGameBot?start=ref_${tg.initDataUnsafe.user.id}`;
   tg.shareUrl(link, "Пригласи друга и получи поинт!");
@@ -281,6 +187,7 @@ document.getElementById("infoBtn").onclick = () => {
   alert("Подпишись на все каналы → таймер запустится → зарабатывай звёзды!");
 };
 
+// Купить слот на главной
 document.querySelector(".buy-slot").onclick = () => {
   document.querySelector('[data-page="buy"]').click();
 };

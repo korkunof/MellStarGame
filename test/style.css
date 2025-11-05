@@ -1,0 +1,41 @@
+/* =================================== */
+/* [ÍÈÆÍÅÅ ÌÅÍŞ] — ÍÀÂÈÃÀÖÈß */
+/* =================================== */
+.bottom-nav { 
+  position: fixed; 
+  bottom: 0; 
+  left: 0; 
+  right: 0; 
+  background: rgba(15, 10, 30, 0.95); 
+  border-top: 1px solid var(--border); 
+  backdrop-filter: blur(12px); 
+  display: flex; 
+  padding: 8px 0; 
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.3); 
+  z-index: 100; 
+}
+.nav-item { 
+  flex: 1; 
+  background: none; 
+  border: none; 
+  color: var(--text-light); 
+  font-size: 0.65rem; /* ÓÌÅÍÜØÅÍÎ äëÿ âëåçàíèÿ íà ıêğàí */
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  gap: 2px; 
+  padding: 6px; 
+  transition: 0.2s; 
+}
+.nav-item .label { 
+  font-size: 0.65rem; /* ÓÌÅÍÜØÅÍÎ */
+  line-height: 1.1;
+  text-align: center;
+}
+.nav-item.active { 
+  color: var(--neon); 
+  text-shadow: 0 0 10px var(--neon); 
+}
+.nav-item.active .label { 
+  filter: drop-shadow(0 0 6px var(--neon)); 
+}

@@ -14,65 +14,49 @@
     <!-- Header -->
     <header class="header">
       <div class="logo">MellStarGame</div>
-      <p class="welcome">Удерживай таймер — получай звёзды!</p>
+      <p class="welcome">Удерживай таймер — получай звёзды. Возможность заработать каждому.</p>
     </header>
 
     <!-- ГЛАВНАЯ -->
     <section id="home" class="page active">
       <h1 class="greeting">Привет, <span id="username">Гость</span>!</h1>
-      <p class="subtitle">Статистика твоего аккаунта</p>
+      <p class="subtitle">Статы<br>Аккаунт</p>
 
-      <!-- Чекбокс: Свернуть статистику -->
-      <label class="toggle-stats">
-        <input type="checkbox" id="collapseStats" checked />
-        <span>Показать статистику</span>
-      </label>
+      <div class="stats-grid">
+        <!-- Уровень -->
+        <div class="stat-card">
+          <div class="question" data-tip="Чем выше — тем быстрее таймер и больше звёзд"></div>
+          <div class="label">Уровень</div>
+          <div class="value" id="level">1</div>
+        </div>
 
-      <div id="statsContainer">
-        <div class="stats-grid">
-          <!-- Уровень -->
-          <div class="stat-card">
-            <div class="question" data-tip="Чем выше — тем быстрее таймер и больше звёзд"></div>
-            <div class="label">Уровень</div>
-            <div class="value" id="level">1</div>
-          </div>
+        <!-- Очки -->
+        <div class="stat-card">
+          <div class="question" data-tip="Очки за уровень: прокачка. Рефералы: 4 очка = x2 буст"></div>
+          <div class="label">Очки уровня</div>
+          <div class="value neon" id="freePoints">0</div>
+          <div class="label sub">Рефералы</div>
+          <div class="value" id="refPoints">0</div>
+        </div>
 
-          <!-- Очки -->
-          <div class="stat-card">
-            <div class="question" data-tip="Очки за уровень: прокачка. Рефералы: 4 очка = x2 буст"></div>
-            <div class="label">Очки уровня</div>
-            <div class="value neon" id="freePoints">0</div>
-            <div class="label sub">Рефералы</div>
-            <div class="value" id="refPoints">0</div>
-          </div>
+        <!-- Слоты -->
+        <div class="stat-card">
+          <div class="question" data-tip="Активные слоты = +24ч. Следи за окончанием!"></div>
+          <div class="label">Слоты</div>
+          <div class="value" id="activeSlots">0 / 0</div>
+          <div class="sub-text">Ближайший: <strong id="nextSlotTime">-</strong></div>
+        </div>
 
-          <!-- Слоты -->
-          <div class="stat-card">
-            <div class="question" data-tip="Активные слоты = +24ч. Следи за окончанием!"></div>
-            <div class="label">Слоты</div>
-            <div class="value" id="activeSlots">0 / 0</div>
-            <div class="sub-text">Ближайший: <strong id="nextSlotTime">-</strong></div>
-          </div>
-
-          <!-- Звёзды -->
-          <div class="stat-card">
-            <div class="question" data-tip="Звёзды за чекпоинт. Ускорение таймера: макс. -5 сек/тик"></div>
-            <div class="label">Звёзды</div>
-            <div class="value gold" id="payoutPer">10</div>
-            <div class="sub-text">Таймер: <strong id="timerSpeed">1,000 сек.</strong></div>
-          </div>
+        <!-- Звёзды -->
+        <div class="stat-card">
+          <div class="question" data-tip="Звёзды за чекпоинт. Ускорение таймера: макс. -5 сек/тик"></div>
+          <div class="label">Звёзды</div>
+          <div class="value gold" id="payoutPer">10</div>
+          <div class="sub-text">Таймер: <strong id="timerSpeed">1,000 сек.</strong></div>
         </div>
       </div>
 
       <button class="buy-slot">Купить слот</button>
-
-      <!-- Чекбокс: Свернуть купленные слоты -->
-      <label class="toggle-stats">
-        <input type="checkbox" id="collapseAdSlots" checked />
-        <span>Показать купленные слоты</span>
-      </label>
-
-      <div id="adSlotsContainer" class="slots-grid"></div>
     </section>
 
     <!-- ПОДПИСКИ -->
@@ -149,7 +133,7 @@
           <select id="slotShows"></select>
         </label>
         <label>Дней: 
-          <input type="number" id="slotDays" min="1" max="30" value="1" Ih />
+          <input type="number" id="slotDays" min="1" max="30" value="1" />
         </label>
         <div class="total-cost">Итого: <strong id="totalCost">1000</strong> звёзд</div>
         <button id="buySlotBtn" class="btn-primary">Купить слот</button>
@@ -158,7 +142,7 @@
 
   </div>
 
-  <!-- НИЖНЕЕ МЕНЮ -->
+  <!-- НИЖНЕЕ МЕНЮ — без дублирования -->
   <nav class="bottom-nav">
     <button data-page="home" class="nav-item active">
       <span class="label">Статы<br>Аккаунт</span>

@@ -454,11 +454,10 @@ body {
   padding: 6px; 
   transition: 0.2s; 
 }
-/* Нижнее меню — жирный шрифт + чуть крупнее */
-.nav-item .label {
-  font-size: 0.75rem;
-  font-weight: 700;
-  line-height: 1.1;
+.nav-item .label { 
+  font-size: 0.9rem; /* УМЕНЬШЕНО */
+  line-height: 1;
+  text-align: center;
 }
 .nav-item.active { 
   color: var(--neon); 
@@ -471,62 +470,3 @@ body {
 /* [УТИЛИТЫ] */
 /* =================================== */
 .hidden { display: none !important; }
-
-/* =================================== */
-/* [СВОРАЧИВАНИЕ БЛОКОВ] */
-/* =================================== */
-.toggle-stats {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 16px 0 8px;
-  color: var(--text-light);
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.toggle-stats input {
-  accent-color: var(--neon);
-}
-
-/* Свернутая статистика */
-#statsContainer.collapsed .stats-grid {
-  display: flex;
-  flex-direction: row;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 8px 0;
-}
-#statsContainer.collapsed .stat-card {
-  min-width: 80px;
-  padding: 10px 8px;
-  font-size: 0.8rem;
-}
-#statsContainer.collapsed .value {
-  font-size: 1.1rem;
-}
-#statsContainer.collapsed .sub-text,
-#statsContainer.collapsed .label.sub,
-#statsContainer.collapsed .question {
-  display: none;
-}
-
-/* Свернутые купленные слоты */
-#adSlotsContainer.collapsed {
-  display: flex;
-  flex-direction: row;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 8px 0;
-}
-#adSlotsContainer.collapsed .slot-card {
-  min-width: 120px;
-  padding: 10px;
-  font-size: 0.75rem;
-  white-space: nowrap;
-}
-#adSlotsContainer.collapsed .slot-card small {
-  display: block;
-  font-size: 0.65rem;
-  opacity: 0.8;
-}
-
