@@ -2,7 +2,7 @@
 // [ИНИЦИАЛИЗАЦИЯ TELEGRAM WEB APP]
 // ===================================
 const tg = window.Telegram.WebApp;
-tg.ready(); 
+tg.ready();
 tg.expand();
 
 const username = tg.initDataUnsafe?.user?.first_name || "Гость";
@@ -12,11 +12,11 @@ document.getElementById("username").textContent = username;
 // [ДАННЫЕ ПОЛЬЗОВАТЕЛЯ]
 // ===================================
 let user = {
-  level: 1,
-  freePoints: 0,
+  level: 2,
+  freePoints: 1,
   referrals: 0,
-  refPoints: 0,
-  boostLevel: 0,
+  refPoints: 4,
+  boostLevel: 1,
   payoutBonus: 0,
   balance: 0,
   progress: 0,
@@ -36,20 +36,48 @@ document.querySelectorAll(".nav-item").forEach(btn => {
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
     document.getElementById(btn.dataset.page).classList.add("active");
     
-    // Обновляем главную при переключении на неё
-    if (btn.dataset.page === "home") {
-      updateMain();
-    }
+    if (btn.dataset.page === "home") updateMain();
+    if (btn.dataset.page === "subscriptions") renderAdSlots();
   };
 });
+
+// ===================================
+// [ПЕРЕКЛЮЧЕНИЕ СТАТИСТИКИ]
+// ===================================
+function initStatsToggle() {
+  const btn = document.getElementById("statsToggleBtn");
+  const grid = document.querySelector(".stats-grid");
+  const collapsed = document.getElementById("collapsedStats");
+
+  btn.classList.add("active");
+  btn.textContent = "Полная";
+  grid.style.display = "grid";
+  collapsed.style.display = "none";
+
+  btn.addEventListener("click", () => {
+    if (btn.classList.contains("active")) {
+      btn.classList.remove("active");
+      btn.textContent = "Краткая";
+      grid.style.display = "none";
+      collapsed.style.display = "block";
+    } else {
+      btn.classList.add("active");
+      btn.textContent = "Полная";
+      grid.style.display = "grid";
+      collapsed.style.display = "none";
+    }
+  });
+}
 
 // ===================================
 // [ГЛАВНАЯ] — ОБНОВЛЕНИЕ СТАТИСТИКИ
 // ===================================
 function updateMain() {
   document.getElementById("level").textContent = user.level;
+  document.getElementById("levelSpent").textContent = user.level - 1;
   document.getElementById("freePoints").textContent = user.freePoints;
   document.getElementById("refPoints").textContent = user.refPoints;
+  document.getElementById("boostLevel").textContent = user.boostLevel * 25;
 
   const active = user.subSlots.filter(s => s.status === "active").length;
   const total = user.subSlots.length;
@@ -60,207 +88,76 @@ function updateMain() {
     .filter(s => s.status === "active" && s.expires)
     .map(s => s.expires)
     .sort((a, b) => a - b)[0];
-  document.getElementById("nextSlotTime").textContent = nearest ? formatTimeLeft(nearest - now) : "-";
+  document.getElementById("nextSlotTime").textContent = nearest ? formatTimeLeft(nearest - now) : "—";
 
-  document.getElementById("payoutPer").textContent = 10 + user.payoutBonus;
+  const payout = 10 + user.payoutBonus;
+  document.querySelectorAll('#payoutPer, #payoutMini').forEach(el => {
+    el.innerHTML = `<span class="star">${payout}</span>`;
+  });
+
   const speed = 1 + (user.level - 1) * 0.088 + user.boostLevel * 0.25;
-  document.getElementById("timerSpeed").textContent = `${speed.toFixed(3).replace('.', ',')} сек.`;
+  document.getElementById("timerSpeed").textContent = speed.toFixed(3).replace('.', ',');
+  document.getElementById("speedMini").textContent = speed.toFixed(3).replace('.', ',');
+
+  document.getElementById("levelMini").textContent = user.level;
+  document.getElementById("boostMini").textContent = user.boostLevel * 25;
+  document.getElementById("slotsMini").textContent = `${active}/${total}`;
+  document.getElementById("speedMini").className = "neon";
+  document.getElementById("levelMini").className = "neon";
+  document.getElementById("boostMini").className = "neon";
 
   // Обновляем купленные слоты
-  renderAdSlots();
+  renderAdSlotsMain();
 }
-updateMain();
 
 // ===================================
-// [ОТРИСОВКА КУПЛЕННЫХ СЛОТОВ]
+// [ОТРИСОВКА КУПЛЕННЫХ СЛОТОВ — НА ГЛАВНОЙ]
 // ===================================
-function renderAdSlots() {
+function renderAdSlotsMain() {
   const cont = document.getElementById("adSlotsContainer");
   cont.innerHTML = "";
 
   if (user.adSlots.length === 0) {
     const div = document.createElement("div");
     div.className = "slot-card empty";
+    div.style.justifyContent = "center";
+    div.style.fontStyle = "italic";
     div.textContent = "Нет купленных слотов";
     cont.appendChild(div);
     return;
   }
 
-  const oneDayMs = 24 * 60 * 60 * 1000;
   user.adSlots.forEach(slot => {
     const div = document.createElement("div");
     div.className = "slot-card active";
-
-    const daysLeft = slot.daysLeft || 0;
-    const timeLeft = daysLeft > 0 ? formatTimeLeft(daysLeft * oneDayMs) : "истёк";
-
-    div.innerHTML = `
-      <div>
-        <strong>${slot.name || "Без имени"}</strong><br>
-        <small>Подписчиков: ${slot.showsLeft || 0}</small><br>
-        <small>Осталось: ${timeLeft}</small>
-      </div>
-    `;
+    div.innerHTML = `<span>${slot.name}</span><span>${slot.showsLeft} показов</span>`;
     cont.appendChild(div);
   });
 }
 
 // ===================================
-// [ЧЕКБОКСЫ СВОРАЧИВАНИЯ]
+// [ОТРИСОВКА СЛОТОВ — В "СЛОТЫ ТАЙМЕР"]
 // ===================================
-document.getElementById("collapseStats").addEventListener("change", function() {
-  const container = document.getElementById("statsContainer");
-  if (this.checked) {
-    container.classList.remove("collapsed");
-  } else {
-    container.classList.add("collapsed");
-  }
-});
+function renderAdSlots() {
+  const container = document.getElementById("adSlotsGrid");
+  if (!container) return;
+  container.innerHTML = "";
 
-document.getElementById("collapseAdSlots").addEventListener("change", function() {
-  const container = document.getElementById("adSlotsContainer");
-  if (this.checked) {
-    container.classList.remove("collapsed");
-  } else {
-    container.classList.add("collapsed");
-  }
-});
-
-// Инициализация: если чекбоксы уже сняты — применить класс
-if (!document.getElementById("collapseStats").checked) {
-  document.getElementById("statsContainer").classList.add("collapsed");
-}
-if (!document.getElementById("collapseAdSlots").checked) {
-  document.getElementById("adSlotsContainer").classList.add("collapsed");
-}
-
-// ===================================
-// [СТРАНИЦА ПОДПИСОК]
-// ===================================
-function renderSubs() {
-  const cont = document.getElementById("slotsContainer");
-  cont.innerHTML = "";
-  user.subSlots.forEach(slot => {
+  user.adSlots.forEach(slot => {
     const div = document.createElement("div");
-    div.className = `slot-card ${slot.status}`;
-    const timeLeft = slot.expires ? formatTimeLeft(slot.expires - Date.now()) : "";
-    div.innerHTML = slot.status === "empty" ? "Слот пустой" : `${slot.name || "Канал"}<br><small>Активен до ${timeLeft}</small>`;
-    cont.appendChild(div);
+    div.className = "slot-card active";
+    div.innerHTML = `<span>${slot.name}</span><span>${slot.showsLeft} показов</span>`;
+    container.appendChild(div);
   });
 
-  const pending = user.subSlots.filter(s => s.status === "pending").length;
-  if (pending > 0) {
-    document.getElementById("timerBox").classList.add("hidden");
-  } else {
-    document.getElementById("timerBox").classList.remove("hidden");
-    startTimer();
+  const emptyCount = 5 - user.adSlots.length;
+  for (let i = 0; i < emptyCount; i++) {
+    const div = document.createElement("div");
+    div.className = "slot-card empty";
+    div.textContent = "Пусто";
+    container.appendChild(div);
   }
-
-  const totalHours = 96;
-  const percent = (user.progress / totalHours) * 100;
-  document.getElementById("progressFill").style.width = `${percent}%`;
-  document.getElementById("progressText").textContent = `${user.progress} / ${totalHours} часов`;
-
-  const checkpoints = document.querySelectorAll('.checkpoint');
-  checkpoints.forEach((cp, i) => {
-    cp.classList.toggle('active', user.progress >= (i + 1) * 24);
-  });
 }
-renderSubs();
-
-let timerInterval = null;
-function startTimer() {
-  if (timerInterval) clearInterval(timerInterval);
-  let start = Date.now();
-  timerInterval = setInterval(() => {
-    const elapsed = (Date.now() - start) / 1000;
-    const speed = 1 + (user.level - 1) * 0.088 + user.boostLevel * 0.25;
-    const effective = elapsed * speed;
-    const h = Math.floor(effective / 3600).toString().padStart(2, '0');
-    const m = Math.floor((effective % 3600) / 60).toString().padStart(2, '0');
-    const s = Math.floor(effective % 60).toString().padStart(2, '0');
-    document.getElementById("timerDisplay").textContent = `${h}:${m}:${s}`;
-  }, 500);
-}
-
-// ===================================
-// [ПРОКАЧКА]
-// ===================================
-function updateUpgrade() {
-  document.getElementById("pointsCounter").textContent = user.freePoints;
-  document.getElementById("currLevel").textContent = user.level;
-  document.getElementById("refPointsDisplay").textContent = user.refPoints;
-  document.getElementById("boostLevel").textContent = user.boostLevel;
-  document.getElementById("boostPercent").textContent = user.boostLevel * 25;
-  document.getElementById("payoutPer").textContent = 10 + user.payoutBonus;
-
-  const add = parseInt(document.getElementById("payoutAdd").value) || 1;
-  const cost = payoutCosts.slice(user.payoutBonus, user.payoutBonus + add).reduce((a, b) => a + b, 0);
-  document.getElementById("payoutCost").textContent = cost;
-}
-updateUpgrade();
-
-document.getElementById("applyLevel").onclick = () => {
-  const target = parseInt(document.getElementById("levelInput").value);
-  if (target <= user.level || target > 45) return alert("Неверный уровень");
-  const cost = target - user.level;
-  if (user.freePoints < cost) return alert("Недостаточно очков");
-  user.freePoints -= cost;
-  user.level = target;
-  updateMain(); updateUpgrade();
-};
-
-document.getElementById("applyBoost").onclick = () => {
-  if (user.refPoints < 4 || user.boostLevel >= 4) return alert("Недостаточно или максимум");
-  user.refPoints -= 4;
-  user.boostLevel++;
-  updateUpgrade();
-};
-
-document.getElementById("buyPayout").onclick = () => {
-  const add = parseInt(document.getElementById("payoutAdd").value);
-  const cost = payoutCosts.slice(user.payoutBonus, user.payoutBonus + add).reduce((a, b) => a + b, 0);
-  if (user.balance < cost) return alert("Недостаточно звёзд");
-  user.balance -= cost;
-  user.payoutBonus += add;
-  updateMain(); updateUpgrade();
-};
-
-// ===================================
-// [ПОКУПКА СЛОТА]
-// ===================================
-const showsSelect = document.getElementById("slotShows");
-const showsOptions = [100,250,500,1000,3000,5000,10000,20000,50000,100000];
-showsOptions.forEach(s => {
-  const opt = document.createElement("option"); opt.value = s; opt.textContent = s;
-  showsSelect.appendChild(opt);
-});
-
-function updateCost() {
-  const base = document.getElementById("slotQuality").value === "vip" ? 5000 : 1000;
-  const shows = parseInt(document.getElementById("slotShows").value);
-  const days = parseInt(document.getElementById("slotDays").value);
-  const cost = base * days + shows * 0.2 * days;
-  document.getElementById("totalCost").textContent = Math.round(cost);
-}
-["slotQuality", "slotShows", "slotDays"].forEach(id => {
-  document.getElementById(id).oninput = updateCost;
-});
-updateCost();
-
-document.getElementById("buySlotBtn").onclick = () => {
-  const cost = parseInt(document.getElementById("totalCost").textContent);
-  if (user.balance < cost) return alert("Недостаточно звёзд");
-  user.balance -= cost;
-  const name = prompt("Название канала:");
-  if (!name) return;
-  user.adSlots.push({ 
-    name, 
-    showsLeft: parseInt(document.getElementById("slotShows").value), 
-    daysLeft: parseInt(document.getElementById("slotDays").value) 
-  });
-  updateMain(); // ← обновляем главную
-};
 
 // ===================================
 // [УТИЛИТЫ]
@@ -271,6 +168,15 @@ function formatTimeLeft(ms) {
   const m = Math.floor((ms % 3600000) / 60000);
   return `${h}ч ${m}м`;
 }
+
+// ===================================
+// [ИНИЦИАЛИЗАЦИЯ]
+// ===================================
+document.addEventListener("DOMContentLoaded", () => {
+  initStatsToggle();
+  updateMain();
+  renderAdSlots();
+});
 
 // КНОПКИ
 document.getElementById("inviteBtn").onclick = () => {
