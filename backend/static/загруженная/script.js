@@ -90,6 +90,23 @@ function updateMain() {
     .sort((a, b) => a - b)[0];
   document.getElementById("nextSlotTime").textContent = nearest ? formatTimeLeft(nearest - now) : "—";
 
+  const payout = 10 + user.payoutBonus;
+  document.querySelectorAll('#payoutPer, #payoutMini').forEach(el => {
+    el.innerHTML = `<span class="star">${payout}</span>`;
+  });
+
+  const speed = 1 + (user.level - 1) * 0.088 + user.boostLevel * 0.25;
+  document.getElementById("timerSpeed").textContent = speed.toFixed(3).replace('.', ',');
+  document.getElementById("speedMini").textContent = speed.toFixed(3).replace('.', ',');
+
+  document.getElementById("levelMini").textContent = user.level;
+  document.getElementById("boostMini").textContent = user.boostLevel * 25;
+  document.getElementById("slotsMini").textContent = `${active}/${total}`;
+  document.getElementById("speedMini").className = "neon";
+  document.getElementById("levelMini").className = "neon";
+  document.getElementById("boostMini").className = "neon";
+
+  // Обновляем купленные слоты
   renderAdSlotsMain();
 }
 
@@ -153,40 +170,12 @@ function formatTimeLeft(ms) {
 }
 
 // ===================================
-// [ОБНОВЛЕНИЕ ПРОГРЕССА]
-// ===================================
-function updateProgress(currentSlot = 1) {
-  const fill = document.getElementById("progressFill");
-  const text = document.getElementById("progressText");
-
-  const percent = (currentSlot / 5) * 100;
-  fill.style.width = percent + "%";
-
-  if (currentSlot > 0) {
-    fill.classList.add("initial-glow");
-  } else {
-    fill.classList.remove("initial-glow");
-  }
-
-  document.querySelectorAll(".checkpoint.passed").forEach(c => c.classList.remove("passed"));
-
-  const positions = ["0%", "25%", "50%", "75%", "100%"];
-  for (let i = 0; i < currentSlot; i++) {
-    const cp = document.querySelector(`.checkpoint[data-pos="${positions[i]}"]`);
-    if (cp) cp.classList.add("passed");
-  }
-
-  text.innerHTML = `<span class="current red-bold">${currentSlot}</span> / <span class="total neon-text">5 слотов</span>`;
-}
-
-// ===================================
 // [ИНИЦИАЛИЗАЦИЯ]
 // ===================================
 document.addEventListener("DOMContentLoaded", () => {
   initStatsToggle();
   updateMain();
   renderAdSlots();
-  updateProgress(1);
 });
 
 // КНОПКИ

@@ -61,7 +61,7 @@
           <!-- 4. Звёзды -->
           <div class="stat-card">
             <div class="label">Звёзд за чекпоинт:</div>
-            <div class="value gold">⭐ 10</div>
+            <div class="value gold">⭐ 10</span></div>
             <div class="sub-text">прогресс: <span id="progressPercent">0%</span></div>
           </div>
 
@@ -80,14 +80,16 @@
           <span class="divider"></span>
           Слоты <span id="slotsMini">0/5</span>
           <span class="divider"></span>
-          ⭐ 10
+          ⭐ <span class="gold">10</span>
           <span class="divider"></span>
           <span id="speedMini" class="neon">1,338</span>
         </div>
       </div>
 
-      <!-- КУПЛЕННЫЕ СЛОТЫ -->
+      <!-- ЗАГОЛОВОК СЛОТОВ -->
       <h3 class="stats-title" style="margin-top: 28px; text-align: center;">Статистика слотов</h3>
+
+      <!-- КУПЛЕННЫЕ СЛОТЫ -->
       <div id="adSlotsContainer">
         <div class="slot-card empty" style="justify-content: center; font-style: italic;">
           Нет купленных слотов
@@ -110,22 +112,18 @@
         <div id="timerDisplay" class="timer-display">00:00:00</div>
       </div>
 
-      <!-- ПРОГРЕСС-БАР: ШАРИКИ ТОЧНО НА ШКАЛЕ -->
       <div class="progress-section">
         <div class="progress-label">Прогресс к чекпоинту</div>
         <div class="progress-bar">
           <div id="progressFill" class="progress-fill"></div>
           <div class="checkpoints">
-            <div class="checkpoint passed" data-pos="0%"></div>
-            <div class="checkpoint" data-pos="25%"></div>
-            <div class="checkpoint" data-pos="50%"></div>
-            <div class="checkpoint" data-pos="75%"></div>
-            <div class="checkpoint final" data-pos="100%"></div>
+            <div class="checkpoint" data-time="0ч"></div>
+            <div class="checkpoint" data-time="24ч"></div>
+            <div class="checkpoint" data-time="48ч"></div>
+            <div class="checkpoint" data-time="72ч"></div>
           </div>
         </div>
-        <div class="progress-text" id="progressText">
-          <span class="current red-bold">1</span> / <span class="total neon-text">5 слотов</span>
-        </div>
+        <div class="progress-text" id="progressText">0 / 96 часов</div>
       </div>
 
       <!-- СЕТКА СЛОТОВ -->
