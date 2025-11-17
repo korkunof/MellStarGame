@@ -38,6 +38,7 @@ document.querySelectorAll(".nav-item").forEach(btn => {
     
     if (btn.dataset.page === "home") updateMain();
     if (btn.dataset.page === "subscriptions") renderAdSlots();
+    if (btn.dataset.page === "upgrade") initUpgradePage();
   };
 });
 
@@ -90,23 +91,6 @@ function updateMain() {
     .sort((a, b) => a - b)[0];
   document.getElementById("nextSlotTime").textContent = nearest ? formatTimeLeft(nearest - now) : "—";
 
-  const payout = 10 + user.payoutBonus;
-  document.querySelectorAll('#payoutPer, #payoutMini').forEach(el => {
-    el.innerHTML = `<span class="star">${payout}</span>`;
-  });
-
-  const speed = 1 + (user.level - 1) * 0.088 + user.boostLevel * 0.25;
-  document.getElementById("timerSpeed").textContent = speed.toFixed(3).replace('.', ',');
-  document.getElementById("speedMini").textContent = speed.toFixed(3).replace('.', ',');
-
-  document.getElementById("levelMini").textContent = user.level;
-  document.getElementById("boostMini").textContent = user.boostLevel * 25;
-  document.getElementById("slotsMini").textContent = `${active}/${total}`;
-  document.getElementById("speedMini").className = "neon";
-  document.getElementById("levelMini").className = "neon";
-  document.getElementById("boostMini").className = "neon";
-
-  // Обновляем купленные слоты
   renderAdSlotsMain();
 }
 
@@ -170,12 +154,139 @@ function formatTimeLeft(ms) {
 }
 
 // ===================================
+// [ОБНОВЛЕНИЕ ПРОГРЕССА]
+// ===================================
+function updateProgress(currentSlot = 1) {
+  const fill = document.getElementById("progressFill");
+  const text = document.getElementById("progressText");
+
+  const percent = (currentSlot / 5) * 100;
+  fill.style.width = percent + "%";
+
+  if (currentSlot > 0) {
+    fill.classList.add("initial-glow");
+  } else {
+    fill.classList.remove("initial-glow");
+  }
+
+  document.querySelectorAll(".checkpoint.passed").forEach(c => c.classList.remove("passed"));
+
+  const positions = ["0%", "25%", "50%", "75%", "100%"];
+  for (let i = 0; i < currentSlot; i++) {
+    const cp = document.querySelector(`.checkpoint[data-pos="${positions[i]}"]`);
+    if (cp) cp.classList.add("passed");
+  }
+
+  text.innerHTML = `<span class="current red-bold">${currentSlot}</span> / <span class="total neon-text">5 слотов</span>`;
+}
+
+// ===================================
+// [ПРОКАЧКА — ИНИЦИАЛИЗАЦИЯ]
+// ===================================
+function initUpgradePage() {
+  // Уровень
+  const levelInput = document.getElementById("levelInput");
+  const decrementBtn = document.getElementById("decrementLevel");
+  const incrementBtn = document.getElementById("incrementLevel");
+
+  function updateLevelDisplay() {
+    document.getElementById("currLevelDisplay").textContent = user.level;
+    document.getElementById("levelSpent").textContent = user.level - 1;
+    document.getElementById("freePoints").textContent = user.freePoints;
+    document.getElementById("availablePoints").textContent = user.freePoints;
+
+    levelInput.value = user.level;
+    levelInput.max = 45;
+
+    // Статистика
+    const maxSlots = 5 + Math.floor((user.level - 1) / 2) * 1;
+    const maxStars = 10 + Math.floor((user.level - 1) / 2);
+    const speedBonus = (user.level - 1) * 0.089;
+
+    document.getElementById("displaySlots").textContent = `${maxSlots}`;
+    document.getElementById("starsPerCheckpoint").textContent = `${10 + user.payoutBonus} из ${maxStars}`;
+    document.getElementById("timerSpeedDisplay").textContent = `+${speedBonus.toFixed(3)}`;
+  }
+
+  decrementBtn.onclick = () => {
+    if (user.freePoints > 0 && user.level > 1) {
+      user.level--;
+      user.freePoints++;
+      updateLevelDisplay();
+      updateMain();
+    }
+  };
+
+  incrementBtn.onclick = () => {
+    if (user.level < 45) {
+      user.level++;
+      user.freePoints--;
+      updateLevelDisplay();
+      updateMain();
+    }
+  };
+
+  // Разгон
+  document.querySelectorAll(".boost-btn").forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll(".boost-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+    };
+  });
+
+  document.getElementById("applyBoost").onclick = () => {
+    const selected = document.querySelector(".boost-btn.active");
+    if (!selected) return alert("Выбери уровень разгона!");
+    const level = parseInt(selected.dataset.level);
+    const cost = level * 4;
+    if (user.refPoints < cost) return alert("Недостаточно реф. очков!");
+    user.boostLevel = level;
+    user.refPoints -= cost;
+    updateMain();
+    alert(`Разгон применён: +${level * 25}% к чекпоинту!`);
+  };
+
+  document.getElementById("inviteFriendBtn").onclick = () => {
+    const link = `https://t.me/MellStarGameBot?start=ref_${tg.initDataUnsafe.user.id}`;
+    tg.shareUrl(link, "Пригласи друга и получи очко реферала!");
+  };
+
+  // Доп. выплата
+  function updatePayoutCost() {
+    const cost = payoutCosts[user.payoutBonus] || 999;
+    document.getElementById("payoutCost").textContent = cost;
+    document.getElementById("currentPayout").textContent = 10 + user.payoutBonus;
+    document.getElementById("extraStarsBought").textContent = user.payoutBonus;
+  }
+
+  document.getElementById("buyPayout").onclick = () => {
+    const cost = payoutCosts[user.payoutBonus] || 999;
+    if (user.balance < cost) return alert("Недостаточно звёзд!");
+    if (!confirm(`Купить +1 звезду за чекпоинт за ${cost} звёзд?`)) return;
+    user.balance -= cost;
+    user.payoutBonus++;
+    updatePayoutCost();
+    updateMain();
+  };
+
+  // Инициализация
+  updateLevelDisplay();
+  updatePayoutCost();
+
+  // Активный уровень разгона
+  const activeBoost = document.querySelector(`.boost-btn[data-level="${user.boostLevel}"]`);
+  if (activeBoost) activeBoost.classList.add("active");
+}
+
+// ===================================
 // [ИНИЦИАЛИЗАЦИЯ]
 // ===================================
 document.addEventListener("DOMContentLoaded", () => {
   initStatsToggle();
   updateMain();
   renderAdSlots();
+  updateProgress(1);
+  initUpgradePage(); // ← Вызываем при загрузке
 });
 
 // КНОПКИ

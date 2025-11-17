@@ -18,7 +18,7 @@ let user = {
   refPoints: 4,
   boostLevel: 1,
   payoutBonus: 0,
-  balance: 9999,
+  balance: 0,
   progress: 0,
   adSlots: [],
   subSlots: Array(5).fill(null).map((_, i) => ({ id: i, status: "empty", expires: null }))
@@ -35,7 +35,7 @@ document.querySelectorAll(".nav-item").forEach(btn => {
     btn.classList.add("active");
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
     document.getElementById(btn.dataset.page).classList.add("active");
-
+    
     if (btn.dataset.page === "home") updateMain();
     if (btn.dataset.page === "subscriptions") renderAdSlots();
     if (btn.dataset.page === "upgrade") initUpgradePage();
@@ -43,9 +43,15 @@ document.querySelectorAll(".nav-item").forEach(btn => {
   };
 });
 
+// Кнопка "Применить разгон"
 document.getElementById("applyBoostNavBtn").onclick = () => {
   document.querySelector('[data-page="upgrade"]').click();
-  setTimeout(() => document.getElementById("boostSection")?.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
+  setTimeout(() => {
+    const boostSection = document.getElementById("boostSection");
+    if (boostSection) {
+      boostSection.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, 300);
 };
 
 // ===================================
@@ -77,7 +83,7 @@ function initStatsToggle() {
 }
 
 // ===================================
-// [ГЛАВНАЯ — ОБНОВЛЕНИЕ СТАТИСТИКИ]
+// [ГЛАВНАЯ] — ОБНОВЛЕНИЕ СТАТИСТИКИ
 // ===================================
 function updateMain() {
   document.getElementById("level").textContent = user.level;
@@ -87,7 +93,8 @@ function updateMain() {
   document.getElementById("boostLevel").textContent = user.boostLevel * 25;
 
   const active = user.subSlots.filter(s => s.status === "active").length;
-  document.getElementById("activeSlots").textContent = `${active} / 5`;
+  const total = user.subSlots.length;
+  document.getElementById("activeSlots").textContent = `${active} / ${total}`;
 
   const now = Date.now();
   const nearest = user.subSlots
@@ -96,93 +103,141 @@ function updateMain() {
     .sort((a, b) => a - b)[0];
   document.getElementById("nextSlotTime").textContent = nearest ? formatTimeLeft(nearest - now) : "—";
 
-  const speed = (1.338 - (user.level - 1) * 0.089).toFixed(3);
-  document.getElementById("timerSpeed").textContent = speed;
-  document.getElementById("speedMini").textContent = speed;
-
   renderAdSlotsMain();
 }
 
 // ===================================
-// [ОТРИСОВКА СЛОТОВ]
+// [ОТРИСОВКА КУПЛЕННЫХ СЛОТОВ — НА ГЛАВНОЙ]
 // ===================================
 function renderAdSlotsMain() {
   const cont = document.getElementById("adSlotsContainer");
   cont.innerHTML = "";
+
   if (user.adSlots.length === 0) {
-    cont.innerHTML = `<div class="slot-card empty" style="justify-content:center;font-style:italic;">Нет купленных слотов</div>`;
+    const div = document.createElement("div");
+    div.className = "slot-card empty";
+    div.style.justifyContent = "center";
+    div.style.fontStyle = "italic";
+    div.textContent = "Нет купленных слотов";
+    cont.appendChild(div);
     return;
   }
+
   user.adSlots.forEach(slot => {
-    cont.innerHTML += `<div class="slot-card active"><span>${slot.name}</span><span>${slot.showsLeft} показов</span></div>`;
+    const div = document.createElement("div");
+    div.className = "slot-card active";
+    div.innerHTML = `<span>${slot.name}</span><span>${slot.showsLeft} показов</span>`;
+    cont.appendChild(div);
   });
 }
 
+// ===================================
+// [ОТРИСОВКА СЛОТОВ — В "СЛОТЫ ТАЙМЕР"]
+// ===================================
 function renderAdSlots() {
   const container = document.getElementById("adSlotsGrid");
+  if (!container) return;
   container.innerHTML = "";
+
   user.adSlots.forEach(slot => {
-    container.innerHTML += `<div class="slot-card active"><span>${slot.name}</span><span>${slot.showsLeft} показов</span></div>`;
+    const div = document.createElement("div");
+    div.className = "slot-card active";
+    div.innerHTML = `<span>${slot.name}</span><span>${slot.showsLeft} показов</span>`;
+    container.appendChild(div);
   });
-  for (let i = user.adSlots.length; i < 5; i++) {
-    container.innerHTML += `<div class="slot-card empty">Пусто</div>`;
+
+  const emptyCount = 5 - user.adSlots.length;
+  for (let i = 0; i < emptyCount; i++) {
+    const div = document.createElement("div");
+    div.className = "slot-card empty";
+    div.textContent = "Пусто";
+    container.appendChild(div);
   }
 }
 
 // ===================================
-// [ФОРМАТИРОВАНИЕ ВРЕМЕНИ]
+// [УТИЛИТЫ]
 // ===================================
 function formatTimeLeft(ms) {
-  const seconds = Math.floor(ms / 1000);
-  const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
-  const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-  const s = String(seconds % 60).padStart(2, '0');
-  return `${h}:${m}:${s}`;
+  if (ms <= 0) return "истёк";
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  return `${h}ч ${m}м`;
 }
 
 // ===================================
-// [ПРОКАЧКА — ИНИЦИАЛИЗАЦИЯ СТРАНИЦЫ]
+// [ОБНОВЛЕНИЕ ПРОГРЕССА]
+// ===================================
+function updateProgress(currentSlot = 1) {
+  const fill = document.getElementById("progressFill");
+  const text = document.getElementById("progressText");
+
+  const percent = (currentSlot / 5) * 100;
+  fill.style.width = percent + "%";
+
+  if (currentSlot > 0) {
+    fill.classList.add("initial-glow");
+  } else {
+    fill.classList.remove("initial-glow");
+  }
+
+  document.querySelectorAll(".checkpoint.passed").forEach(c => c.classList.remove("passed"));
+
+  const positions = ["0%", "25%", "50%", "75%", "100%"];
+  for (let i = 0; i < currentSlot; i++) {
+    const cp = document.querySelector(`.checkpoint[data-pos="${positions[i]}"]`);
+    if (cp) cp.classList.add("passed");
+  }
+
+  text.innerHTML = `<span class="current red-bold">${currentSlot}</span> / <span class="total neon-text">5 слотов</span>`;
+}
+
+// ===================================
+// [ПРОКАЧКА — ИНИЦИАЛИЗАЦИЯ]
 // ===================================
 function initUpgradePage() {
-  const availablePointsSpan = document.getElementById("availablePoints");
+  // Уровень
+  const levelInput = document.getElementById("levelInput");
+  const decrementBtn = document.getElementById("decrementLevel");
+  const incrementBtn = document.getElementById("incrementLevel");
 
   function updateLevelDisplay() {
     document.getElementById("currLevelDisplay").textContent = user.level;
-    document.getElementById("levelSpentHeader").textContent = user.level - 1;
-    document.getElementById("freePointsHeader").textContent = user.freePoints;
-    availablePointsSpan.textContent = user.freePoints;
+    document.getElementById("levelSpent").textContent = user.level - 1;
+    document.getElementById("freePoints").textContent = user.freePoints;
+    document.getElementById("availablePoints").textContent = user.freePoints;
 
-    const maxSlots = 5 + Math.floor((user.level - 1) / 2);
+    levelInput.value = user.level;
+    levelInput.max = 45;
+
+    const maxSlots = 5 + Math.floor((user.level - 1) / 2) * 1;
     const maxStars = 10 + Math.floor((user.level - 1) / 2);
-    const bonus = (user.level - 1) * 0.089;
+    const speedBonus = (user.level - 1) * 0.089;
 
-    document.querySelectorAll(".stats-box p strong")[0].innerHTML = `<span class="pink">${maxSlots}</span> из 28`;
-    document.querySelectorAll(".stats-box p strong")[1].innerHTML = `<span class="pink">${10 + user.payoutBonus}</span>⭐ из ${maxStars}`;
-    document.querySelectorAll(".stats-box p strong")[2].innerHTML = `<span class="pink">+${bonus.toFixed(3)}</span> из +4,005`;
-
-    document.getElementById("resetLevelBtn").disabled = user.level <= 1;
-    document.getElementById("addLevelBtn").disabled = user.level >= 45 || user.freePoints <= 0;
+    document.querySelector(".stats-box p:nth-child(1) strong").innerHTML = `<span class="pink">${maxSlots}</span> из 28`;
+    document.querySelector(".stats-box p:nth-child(2) strong").innerHTML = `<span class="pink">${10 + user.payoutBonus}</span>⭐ из ${maxStars}`;
+    document.querySelector(".stats-box p:nth-child(3) strong").innerHTML = `<span class="pink">+${speedBonus.toFixed(3)}</span> из +4,005`;
   }
 
-  document.getElementById("resetLevelBtn").onclick = () => {
-    if (user.level <= 1) return;
-    user.freePoints += (user.level - 1);
-    user.level = 1;
-    updateLevelDisplay();
-    updateMain();
+  decrementBtn.onclick = () => {
+    if (user.freePoints > 0 && user.level > 1) {
+      user.level--;
+      user.freePoints++;
+      updateLevelDisplay();
+      updateMain();
+    }
   };
 
-  document.getElementById("addLevelBtn").onclick = () => {
-    if (user.level >= 45 || user.freePoints <= 0) return;
-    user.level++;
-    user.freePoints--;
-    updateLevelDisplay();
-    updateMain();
+  incrementBtn.onclick = () => {
+    if (user.level < 45) {
+      user.level++;
+      user.freePoints--;
+      updateLevelDisplay();
+      updateMain();
+    }
   };
 
   // Разгон
-  document.getElementById("refPointsDisplay").textContent = user.refPoints;
-
   document.querySelectorAll(".boost-btn").forEach(btn => {
     btn.onclick = () => {
       document.querySelectorAll(".boost-btn").forEach(b => b.classList.remove("active"));
@@ -198,9 +253,8 @@ function initUpgradePage() {
     if (user.refPoints < cost) return alert("Недостаточно реф. очков!");
     user.boostLevel = level;
     user.refPoints -= cost;
-    document.getElementById("refPointsDisplay").textContent = user.refPoints;
     updateMain();
-    alert(`Разгон ${level} ур. применён! (+${level * 25}%)`);
+    alert(`Разгон применён: +${level * 25}% к чекпоинту!`);
   };
 
   document.getElementById("inviteFriendBtn").onclick = () => {
@@ -210,22 +264,23 @@ function initUpgradePage() {
 
   // Доп. выплата
   function updatePayoutCost() {
-    const cost = payoutCosts[user.payoutBonus] || 9999;
+    const cost = payoutCosts[user.payoutBonus] || 999;
     document.getElementById("payoutCost").textContent = cost;
     document.getElementById("currentPayout").textContent = 10 + user.payoutBonus;
     document.getElementById("extraStarsBought").textContent = user.payoutBonus;
   }
 
   document.getElementById("buyPayout").onclick = () => {
-    const cost = payoutCosts[user.payoutBonus] || 9999;
+    const cost = payoutCosts[user.payoutBonus] || 999;
     if (user.balance < cost) return alert("Недостаточно звёзд!");
-    if (!confirm(`Купить +1 звезду за ${cost} ⭐?`)) return;
+    if (!confirm(`Купить +1 звезду за чекпоинт за ${cost} звёзд?`)) return;
     user.balance -= cost;
     user.payoutBonus++;
     updatePayoutCost();
     updateMain();
   };
 
+  // Инициализация
   updateLevelDisplay();
   updatePayoutCost();
 
@@ -250,6 +305,11 @@ function initBuyPage() {
   const showsCost = document.getElementById("showsCost");
   const totalCalc = document.getElementById("totalCalc");
 
+  resetBtn.onclick = () => {
+    name.value = ""; link.value = ""; type.value = "стандарт"; shows.value = "1000";
+    updateCalc();
+  };
+
   function updateCalc() {
     const showsValue = parseInt(shows.value);
     const isVip = type.value === "VIP слот";
@@ -264,11 +324,6 @@ function initBuyPage() {
     showsCost.textContent = showsCostValue;
     totalCalc.textContent = total;
   }
-
-  resetBtn.onclick = () => {
-    name.value = ""; link.value = ""; type.value = "стандарт"; shows.value = "1000";
-    updateCalc();
-  };
 
   [name, link, type, shows].forEach(el => el.addEventListener("input", updateCalc));
   updateCalc();
@@ -300,19 +355,21 @@ function initBuyPage() {
 }
 
 // ===================================
-// [ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ]
+// [ИНИЦИАЛИЗАЦИЯ]
 // ===================================
 document.addEventListener("DOMContentLoaded", () => {
   initStatsToggle();
   updateMain();
   renderAdSlots();
+  updateProgress(1);
   initUpgradePage();
 });
 
-// Кнопки
+// КНОПКИ
 document.getElementById("infoBtn").onclick = () => {
   alert("Подпишись на все каналы → таймер запустится → зарабатывай звёзды!");
 };
+
 document.querySelector(".buy-slot").onclick = () => {
   document.querySelector('[data-page="buy"]').click();
 };

@@ -21,13 +21,17 @@
     <section id="home" class="page active">
       <h1 class="greeting">Привет, <span id="username">Гость</span>!</h1>
 
+      <!-- ЗАГОЛОВОК + КНОПКА -->
       <div class="stats-header">
         <h2 class="stats-title">Статистика аккаунта</h2>
         <button id="statsToggleBtn" class="stats-toggle-btn active">Полная</button>
       </div>
 
+      <!-- СТАТИСТИКА -->
       <div id="statsContainer">
+        <!-- РАЗВЁРНУТАЯ -->
         <div class="stats-grid">
+          <!-- 1. Уровень -->
           <div class="stat-card">
             <div class="level-header">
               Уровень <span id="level" class="neon">2</span> / 45
@@ -37,12 +41,14 @@
             <div class="level-row">свободно: <span id="freePoints" class="neon">1</span></div>
           </div>
 
+          <!-- 2. Рефералы -->
           <div class="stat-card">
             <div class="label ref-title">Реферальные очки</div>
             <div class="ref-row">доступно: <span id="refPoints" class="neon">4</span></div>
-            <div class="ref-row">разгон: <span id="boostLevel" class="neon">25</8></div>
+            <div class="ref-row">разгон: <span id="boostLevel" class="neon">25</span>%</div>
           </div>
 
+          <!-- 3. Слоты -->
           <div class="stat-card">
             <div class="label">Слоты <span id="activeSlots">0 / 5</span></div>
             <div class="sub-text">ближайший к замене: <strong id="nextSlotTime">—</strong></div>
@@ -52,18 +58,21 @@
             </label>
           </div>
 
+          <!-- 4. Звёзды -->
           <div class="stat-card">
             <div class="label">Звёзд за чекпоинт:</div>
             <div class="value gold">10 ⭐</div>
             <div class="sub-text">прогресс: <span id="progressPercent">0%</span></div>
           </div>
 
+          <!-- 5. Скорость таймера -->
           <div class="stat-card full-width">
-            <div class="label">Скорость таймера: <span id="timerSpeed" class="pink">1,338</span> секунд</div>
+            <div class="label">Скорость таймера: <span id="timerSpeed" class="neon">1,338</span> секунд</div>
             <div class="sub-text">прогресс: <span id="speedProgress">0%</span></div>
           </div>
         </div>
 
+        <!-- СВЁРНУТАЯ -->
         <div id="collapsedStats" class="collapsed-stats">
           Ур. <span id="levelMini" class="neon">2</span>
           <span class="divider"></span>
@@ -73,10 +82,11 @@
           <span class="divider"></span>
           10 ⭐
           <span class="divider"></span>
-          <span id="speedMini" class="pink">1,338</span>
+          <span id="speedMini" class="neon">1,338</span>
         </div>
       </div>
 
+      <!-- КУПЛЕННЫЕ СЛОТЫ -->
       <h3 class="stats-title" style="margin-top: 28px; text-align: center;">Статистика слотов</h3>
       <div id="adSlotsContainer">
         <div class="slot-card empty" style="justify-content: center; font-style: italic;">
@@ -84,10 +94,11 @@
         </div>
       </div>
 
+      <!-- КНОПКА КУПИТЬ -->
       <button class="buy-slot">Купить слот</button>
     </section>
 
-    <!-- СЛОТЫ + ТАЙМЕР (ВОЗВРАЩЁННАЯ ШКАЛА С ШАРИКАМИ) -->
+    <!-- СЛОТЫ ТАЙМЕР -->
     <section id="subscriptions" class="page">
       <div class="subs-controls">
         <button id="applyBoostNavBtn" class="btn-neon">Применить разгон</button>
@@ -99,11 +110,11 @@
         <div id="timerDisplay" class="timer-display">00:00:00</div>
       </div>
 
-      <!-- Восстановленная оригинальная шкала -->
+      <!-- ПРОГРЕСС-БАР -->
       <div class="progress-section">
         <div class="progress-label">Прогресс к чекпоинту</div>
         <div class="progress-bar">
-          <div id="progressFill" class="progress-fill initial-glow"></div>
+          <div id="progressFill" class="progress-fill"></div>
           <div class="checkpoints">
             <div class="checkpoint passed" data-pos="0%"></div>
             <div class="checkpoint" data-pos="25%"></div>
@@ -117,33 +128,38 @@
         </div>
       </div>
 
+      <!-- СЕТКА СЛОТОВ -->
       <div id="adSlotsGrid" class="slots-grid"></div>
     </section>
 
     <!-- ПРОКАЧКА -->
     <section id="upgrade" class="page">
-
-      <!-- УРОВЕНЬ -->
+      <!-- БЛОК 1: УРОВЕНЬ -->
       <div class="upgrade-block">
         <div class="upgrade-header">
-          <strong>Уровень <span id="currLevelDisplay">2</span> / 45</strong><br>
-          <span class="small-text">Распределено: <span id="levelSpentHeader">1</span> | Свободно: <span id="freePointsHeader">1</span></span>
+          <div>
+            <strong>Уровень <span id="currLevelDisplay">2</span> / 45</strong><br>
+            <span class="small-text">Распределено: <span id="levelSpent">1</span> | Свободно: <span id="freePoints">0</span></span>
+          </div>
         </div>
 
         <div class="upgrade-content">
-          <div class="highlight-box level-points-box">
+          <div class="highlight-box">
             <p class="highlight-title pink">Распредели свободные очки!</p>
-            <p class="highlight-subtitle pink">Доступно: <span id="availablePoints">1</span></p>
-            <div class="level-points-controls">
-              <button id="resetLevelBtn" class="btn-level pink-bg">Сбросить</button>
-              <button id="addLevelBtn" class="btn-level pink-bg">Прокачать +1</button>
+            <p class="highlight-subtitle pink">Доступно: <span id="availablePoints">0</span></p>
+            <div class="level-controls">
+              <button id="decrementLevel" class="btn-level pink-bg">-</button>
+              <input type="number" id="levelInput" value="1" min="1" max="45" readonly />
+              <button id="incrementLevel" class="btn-level pink-bg">+</button>
             </div>
           </div>
 
           <div class="stats-box">
             <p>отображать слотов: <strong><span class="pink">5</span> из 28</strong></p>
             <p>звёзд за чекпоинт: <strong><span class="pink">10</span>⭐ из 33</strong></p>
-            <p>Таймер: ускорение сек/тик<br><strong><span class="pink">+0.089</span> из +4,005</strong></p>
+            <p>Таймер: ускорение сек/тик<br>
+              <strong><span class="pink">+0.089</span> из +4,005</strong>
+            </p>
           </div>
 
           <div class="info-text">
@@ -157,48 +173,45 @@
         </div>
       </div>
 
-      <!-- РАЗГОН (НОВАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ) -->
+      <!-- БЛОК 2: РАЗГОН -->
       <div class="upgrade-block" id="boostSection">
         <div class="upgrade-header">
           <strong>Разгон за рефералов</strong>
         </div>
 
         <div class="upgrade-content">
-          <p>Очков рефералов получено: <strong><span id="refPointsDisplay" class="pink">4</span></strong></p>
-
-          <p>Выбери уровень разгона:</p>
+          <p>Очков рефералов получено: <strong><span id="refPoints">4</span></strong></p>
+          <p>Выбери уровень прокачки</p>
 
           <div class="boost-levels">
             <button class="boost-btn" data-level="1">1 - 25%</button>
             <button class="boost-btn" data-level="2">2 - 50%</button>
             <button class="boost-btn" data-level="3">3 - 75%</button>
             <button class="boost-btn" data-level="4">4 - 100%</button>
+            <button id="applyBoost" class="btn-apply-boost">применить<br>к чекпоинту</button>
           </div>
 
-          <p class="info-text small">
-            *уровни разгона влияют на буст скорости таймера до следующего чекпоинта (от 1 до 4).<br>
-            Максимальный разгон 4 ур. = х2 скорости (100% ускорение).
-          </p>
-
-          <button id="applyBoost" class="btn-apply-boost">применить к чекпоинту</button>
-
           <button id="inviteFriendBtn" class="btn-invite">Пригласить друга</button>
+
           <p class="info-text small">за одного приглашённого друга получаешь 1 очко реферала</p>
         </div>
       </div>
 
-      <!-- ДОП. ВЫПЛАТА -->
+      <!-- БЛОК 3: ДОПОЛНИТЕЛЬНАЯ ВЫПЛАТА -->
       <div class="upgrade-block">
         <div class="upgrade-header">
           <strong>Дополнительная прокачка выплат</strong>
         </div>
+
         <div class="upgrade-content">
           <p>выплат за чекпоинт сейчас: <strong><span id="currentPayout">10</span></strong></p>
           <p>дополнительных звёзд куплено: <strong><span id="extraStarsBought">0</span></strong></p>
           <hr class="divider">
+
           <p class="highlight-title">Повысить выплату за чекпоинт на 1 звезду</p>
           <p class="cost">Цена: <strong><span id="payoutCost">10</span> звёзд</strong></p>
           <button id="buyPayout" class="btn-buy-payout">ПОВЫСИТЬ</button>
+
           <p class="info-text small">после покупки звёзды будут списаны с вашего аккаунта Telegram</p>
         </div>
       </div>
@@ -207,19 +220,30 @@
     <!-- ПОКУПКА СЛОТА -->
     <section id="buy" class="page">
       <h2 class="buy-title">Купить рекламный слот</h2>
+
       <div class="buy-form">
+
+        <!-- Платформа -->
         <div class="form-group">
           <label>платформа</label>
-          <select id="platformSelect"><option value="telegram">telegram</option></select>
+          <select id="platformSelect">
+            <option value="telegram">telegram</option>
+          </select>
         </div>
+
+        <!-- Название -->
         <div class="form-group">
           <label>название слота</label>
           <input type="text" id="slotName" placeholder="введите название слота" />
         </div>
+
+        <!-- Ссылка -->
         <div class="form-group">
           <label>ссылка на событие</label>
           <input type="text" id="slotLink" placeholder="введите ссылку" />
         </div>
+
+        <!-- Тип слота -->
         <div class="form-group">
           <label>тип слота</label>
           <select id="slotType">
@@ -227,6 +251,8 @@
             <option value="VIP слот">VIP слот</option>
           </select>
         </div>
+
+        <!-- Показы -->
         <div class="form-group">
           <label>показы / результаты</label>
           <select id="showsSelect">
@@ -236,29 +262,35 @@
           </select>
         </div>
 
+        <!-- КАЛЬКУЛЯЦИЯ -->
         <div class="calc-section">
-          <div>платформа: Telegram <span># <span id="platformCostCalc">100</span> ⭐</span></div>
-          <div>тип слота: <span id="calcType">стандарт</span> <span># <span id="typeCost">1000</span> ⭐</span></div>
-          <div>показы: <span id="calcShows">1000</span> подписок <span># <span id="showsCost">500</span> ⭐</span></div>
+          <div>платформа: Telegram <span class="gold">### 100 ⭐</span></div>
+          <div>тип слота: <span id="calcType">стандарт</span> <span class="gold">### <span id="typeCost">1000</span> ⭐</span></div>
+          <div>показы: <span id="calcShows">1000</span> подписок <span class="gold">### <span id="showsCost">500</span> ⭐</span></div>
           <div class="total-line">ИТОГО: <span id="totalCalc">1600</span> ⭐</div>
         </div>
 
+        <!-- КНОПКИ -->
         <div class="buy-buttons">
           <button id="resetBtn">сброс</button>
           <button id="payBtn">ОПЛАТИТЬ ⭐</button>
         </div>
 
+        <!-- ПОДВАЛ -->
         <div class="buy-footer">
           <p>#при оплате ⭐будут списаны с вашего аккаунта telegram</p>
           <p>? где и как купить звёзды <a href="#" class="buy-stars-link">купить ⭐</a></p>
           <p class="disclaimer">
-            *MellStarGame не несёт ответственности за качество аудитории полученной от покупки слота. Деятельность осуществляется в рамках данного мероприятия, является геймификацией процесса ознакомления пользователей с рекламным контентом, благодарим за понимание!
+            *MellStarGame не несёт ответственности за качество аудитории полученной при покупке слота. Деятельность осуществляется в рамках данного процесса, является единичной и не является постоянным пользованием с рекламным контентом
           </p>
         </div>
+
       </div>
     </section>
+
   </div>
 
+  <!-- НИЖНЕЕ МЕНЮ -->
   <nav class="bottom-nav">
     <button data-page="home" class="nav-item active"><span class="label">Статы<br>Аккаунт</span></button>
     <button data-page="subscriptions" class="nav-item"><span class="label">Слоты<br>Таймер</span></button>
