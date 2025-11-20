@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -9,68 +9,50 @@ import os
 import logging
 from telegram.constants import ParseMode
 
-# ===== ЛОГИ =====
+# === Наши новые модули ===
+from database import engine, AsyncSessionLocal
+from models import User, Referral
+from auth import verify_telegram_initdata
+from sqlalchemy import select, update, insert
+from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# ===== ЗАГРУЗКА .ENV =====
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # например: https://mellstar-backend.onrender.com/webhook
-FRONTEND_URL = os.getenv("FRONTEND_URL")  # например: https://mell-star-game.vercel.app
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 
-# ===== ИНИЦИАЛИЗАЦИЯ БОТА =====
 application = None
 if BOT_TOKEN:
     application = Application.builder().token(BOT_TOKEN).build()
-else:
-    logger.warning("⚠️ BOT_TOKEN не найден в .env — бот не будет активирован.")
 
-# ===== ХЭНДЛЕР /start =====
 async def start(update: Update, context: CallbackContext):
-    user_id = update.effective_user.id if update.effective_user else "unknown"
-    logger.info(f"Получена команда /start от {user_id}")
-
-    web_url = FRONTEND_URL or (f"{WEBHOOK_URL.rsplit('/', 1)[0]}/static/index.html" if WEBHOOK_URL else "")
-    if not web_url:
-        web_url = "https://example.vercel.app/static/index.html"
-
-    keyboard = [[InlineKeyboardButton("🎮 Играть", web_app=WebAppInfo(url=web_url))]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
+    web_url = FRONTEND_URL or f"{WEBHOOK_URL.rsplit('/', 1)[0]}/static/index.html"
+    keyboard = [[InlineKeyboardButton("Играть 🎮", web_app=WebAppInfo(url=web_url))]]
     await update.message.reply_text(
-        "Привет! Это <b>MellStarGameBot</b>.\nНажми <b>Играть</b>, чтобы открыть игру 🚀",
-        reply_markup=reply_markup,
+        "Привет! Это <b>MellStarGameBot</b>\nНажми играть и удерживай таймер 🚀",
+        reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode=ParseMode.HTML
     )
 
 if application:
     application.add_handler(CommandHandler("start", start))
 
-# ===== ЖИЗНЕННЫЙ ЦИКЛ =====
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if application:
+    if application and WEBHOOK_URL:
         await application.initialize()
-        if WEBHOOK_URL:
-            try:
-                await application.bot.set_webhook(WEBHOOK_URL)
-                logger.info(f"✅ Webhook установлен: {WEBHOOK_URL}")
-            except Exception as e:
-                logger.error(f"Ошибка установки webhook: {e}")
+        await application.bot.set_webhook(WEBHOOK_URL)
+        logger.info(f"Webhook установлен: {WEBHOOK_URL}")
     yield
     if application:
-        try:
-            await application.shutdown()
-            logger.info("🔻 Application завершён корректно.")
-        except Exception as e:
-            logger.error(f"Ошибка при завершении application: {e}")
+        await application.shutdown()
 
-# ===== FASTAPI =====
 app = FastAPI(lifespan=lifespan)
 
-# Разрешаем CORS для Telegram WebApp
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -79,50 +61,71 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ===== МОНТИРУЕМ СТАТИКУ =====
-static_path = os.path.join(os.path.dirname(__file__), "static")
-if os.path.exists(static_path):
-    app.mount("/static", StaticFiles(directory=static_path, html=True), name="static")
-    logger.info(f"📁 Статика подключена: {static_path}")
-else:
-    logger.warning("⚠️ Папка static не найдена!")
+app.mount("/static", StaticFiles(directory="static", html=True), name="static")
 
-# ===== ROUTES =====
 @app.get("/")
-def home():
-    return {"message": "✅ MellStarGameBot backend активен и готов!"}
+async def home():
+    return {"message": "MellStarGame backend готов! 🚀"}
 
 @app.post("/webhook")
-async def telegram_webhook(request: Request):
+async def webhook(request: Request):
     if not application:
-        return {"status": "no bot"}
-    try:
-        data = await request.json()
-        update = Update.de_json(data, application.bot)
-        await application.process_update(update)
-        return {"status": "ok"}
-    except Exception as e:
-        logger.error(f"Ошибка при webhook: {e}", exc_info=True)
-        return {"status": "error", "message": str(e)}
+        return {"ok": False}
+    data = await request.json()
+    update = Update.de_json(data, application.bot)
+    await application.process_update(update)
+    return {"ok": True}
+
+# === БАЗА ДАННЫХ ===
+async def get_db() -> AsyncSession:
+    async with AsyncSessionLocal() as session:
+        yield session
 
 @app.get("/user/{user_id}")
-async def get_user(user_id: int):
-    logger.info(f"GET /user/{user_id}")
+async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.get(User, user_id)
+    if not result:
+        return {"new_user": True}
     return {
-        "userId": user_id,
-        "slots": [{"name": "Пусто", "status": "empty"} for _ in range(5)],
-        "progress": 0,
-        "level": 1,
-        "points": 0
+        "level": result.level,
+        "free_points": result.free_points,
+        "payout_bonus": result.payout_bonus,
+        "balance": result.balance,
+        "ref_points": result.ref_points,
+        "current_boost_level": result.current_boost_level,
+        "current_checkpoint": result.current_checkpoint,
+        "checkpoint_progress": result.checkpoint_progress,
+        # ... можно добавить всё остальное
     }
 
 @app.post("/user/{user_id}")
-async def save_user(user_id: int, data: dict):
-    logger.info(f"POST /user/{user_id}: {data}")
+async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    # Проверка подписи Telegram WebApp
+    init_data = request.headers.get("X-Telegram-WebApp-InitData")
+    if not init_data:
+        raise HTTPException(403, "No init data")
+    verify_telegram_initdata(init_data)
+
+    payload = await request.json()
+
+    user = await db.get(User, user_id)
+    if not user:
+        user = User(id=user_id)
+        db.add(user)
+
+    # Обновляем только разрешённые поля
+    allowed_fields = {
+        "level", "free_points", "payout_bonus", "balance",
+        "ref_points", "current_boost_level",
+        "timer_started_at", "current_checkpoint", "checkpoint_progress"
+    }
+    for key, value in payload.items():
+        if key in allowed_fields and hasattr(user, key):
+            setattr(user, key, value)
+
+    await db.commit()
     return {"status": "saved"}
 
-# ===== ЛОКАЛЬНЫЙ ЗАПУСК =====
 if __name__ == "__main__":
     import uvicorn
-    logger.info("🚀 Локальный запуск FastAPI (без webhook)")
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 3000)))
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 3000)), reload=True)
