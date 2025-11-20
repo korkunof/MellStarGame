@@ -3,9 +3,6 @@ import hmac
 from typing import Dict
 
 def verify_telegram_initdata(init_data: str, bot_token: str) -> bool:
-    """
-    Проверяет подлинность initData из Telegram WebApp
-    """
     try:
         parsed_data: Dict[str, str] = {}
         for item in init_data.split("&"):
@@ -13,7 +10,10 @@ def verify_telegram_initdata(init_data: str, bot_token: str) -> bool:
                 key, value = item.split("=", 1)
                 parsed_data[key] = value
 
-        hash_value = parsed_data.pop("hash", "")
+        hash_value = parsed_data.pop("hash", None)
+        if not hash_value:
+            return False
+
         data_check_string = "\n".join(
             f"{k}={v}" for k, v in sorted(parsed_data.items())
         )
