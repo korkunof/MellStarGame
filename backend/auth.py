@@ -1,26 +1,28 @@
-from fastapi import Request, HTTPException
-from hashlib import sha256
+import hashlib
 import hmac
-import os
-from dotenv import load_dotenv
+from typing import Dict
 
-load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN").encode()
+def verify_telegram_initdata(init_data: str, bot_token: str) -> bool:
+    """
+    Проверяет подлинность initData из Telegram WebApp
+    """
+    try:
+        parsed_data: Dict[str, str] = {}
+        for item in init_data.split("&"):
+            if "=" in item:
+                key, value = item.split("=", 1)
+                parsed_data[key] = value
 
-def verify_telegram_initdata(init_data: str) -> dict:
-    parsed = dict(pair.split("=", 1) for pair in init_data.split("&") if pair)
-    received_hash = parsed.pop("hash")
+        hash_value = parsed_data.pop("hash", "")
+        data_check_string = "\n".join(
+            f"{k}={v}" for k, v in sorted(parsed_data.items())
+        )
 
-    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
-    secret_key = sha256(BOT_TOKEN).digest()
-    calculated_hash = hmac.new(secret_key, data_check_string.encode(), sha256).hexdigest()
+        secret_key = hashlib.sha256(bot_token.encode()).digest()
+        calculated_hash = hmac.new(
+            secret_key, data_check_string.encode(), hashlib.sha256
+        ).hexdigest()
 
-    if calculated…. if calculated_hash != received_hash:
-        raise HTTPException(status_code=403, detail="Invalid hash")
-
-    # Возвращаем данные пользователя
-    import json
-    user_json = parsed.get("user")
-    if user_json:
-        return json.loads(user_json)
-    return {}
+        return hmac.compare_digest(calculated_hash, hash_value)
+    except Exception:
+        return False
