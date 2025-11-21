@@ -1,7 +1,7 @@
 ﻿# backend/main.py
 import os
 import json
-import logging                                   # ← ЭТОТ ИМПОРТ БЫЛ ЗАБЫТ
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Depends, HTTPException
@@ -38,7 +38,6 @@ application = None
 if BOT_TOKEN:
     application = Application.builder().token(BOT_TOKEN).build()
 
-
 async def start(update: Update, context: CallbackContext):
     web_url = FRONTEND_URL or f"{WEBHOOK_URL.rsplit('/', 1)[0]}/"
     keyboard = [[InlineKeyboardButton("Играть", web_app=WebAppInfo(url=web_url))]]
@@ -48,13 +47,11 @@ async def start(update: Update, context: CallbackContext):
         parse_mode=ParseMode.HTML
     )
 
-
 if application:
     application.add_handler(CommandHandler("start", start))
 
-
 # ======================
-# Lifespan — установка webhook
+# Lifespan
 # ======================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,7 +63,6 @@ async def lifespan(app: FastAPI):
     if application:
         await application.shutdown()
 
-
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
@@ -77,22 +73,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ======================
 # Статика
-# ======================
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-
 # ======================
-# DB сессия
+# DB
 # ======================
 async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         yield session
 
-
 # ======================
-# Webhook для Telegram
+# Webhook
 # ======================
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
@@ -103,28 +95,42 @@ async def telegram_webhook(request: Request):
     await application.process_update(update)
     return {"ok": True}
 
-
 # ======================
-# API пользователя
+# API: получение + создание пользователя
 # ======================
 @app.get("/api/user/{user_id}")
 async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.get(User, user_id)
     if not result:
-        return {"new_user": True}
+        # ← СОЗДАЁМ, если нет
+        new_user = User(
+            id=user_id,
+            level=1,
+            free_points=0,
+            ref_points=0,
+            payout_bonus=0,
+            balance=0.0
+        )
+        db.add(new_user)
+        await db.commit()
+        logger.info(f"Создан пользователь через GET /api/user/: {user_id}")
+        return {"new_user": True, "created": True}
+
     return {
         "level": result.level,
         "free_points": result.free_points,
         "payout_bonus": result.payout_bonus,
         "balance": result.balance,
         "ref_points": result.ref_points,
-        "current_boost_level": result.current_boost_level,
+        "current_boost_level": result.current_boost_level or 0,
         "timer_started_at": result.timer_started_at.isoformat() if result.timer_started_at else None,
         "current_checkpoint": result.current_checkpoint,
         "checkpoint_progress": result.checkpoint_progress,
     }
 
-
+# ======================
+# API: сохранение данных
+# ======================
 @app.post("/api/user/{user_id}")
 async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-WebApp-InitData")
@@ -150,55 +156,48 @@ async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(g
     await db.commit()
     return {"status": "saved"}
 
-
 # ======================
-# Главная страница + автосоздание пользователя
+# Главная + автосоздание при открытии WebApp
 # ======================
 @app.get("/")
 async def root(request: Request, db: AsyncSession = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-WebApp-InitData", "")
 
-    user_id = None
-    user_info = None
-
     if init_data and verify_telegram_initdata(init_data, BOT_TOKEN):
-        for part in init_data.split("&"):
-            if part.startswith("user="):
-                try:
+        try:
+            for part in init_data.split("&"):
+                if part.startswith("user="):
                     user_info = json.loads(part[5:])
                     user_id = user_info.get("id")
-                except:
-                    pass
-                break
-
-        if user_id:
-            db_user = await db.get(User, user_id)
-            if not db_user:
-                new_user = User(
-                    id=user_id,
-                    username=user_info.get("username"),
-                    first_name=user_info.get("first_name"),
-                    level=1,
-                    free_points=0,
-                    ref_points=0,
-                    payout_bonus=0,
-                    balance=0.0
-                )
-                db.add(new_user)
-                await db.commit()
-                logger.info(f"Создан новый пользователь: {user_id}")
+                    if user_id:
+                        db_user = await db.get(User, user_id)
+                        if not db_user:
+                            new_user = User(
+                                id=user_id,
+                                username=user_info.get("username"),
+                                first_name=user_info.get("first_name"),
+                                level=1,
+                                free_points=0,
+                                ref_points=0,
+                                payout_bonus=0,
+                                balance=0.0
+                            )
+                            db.add(new_user)
+                            await db.commit()
+                            logger.info(f"Создан пользователь через WebApp: {user_id}")
+                    break
+        except Exception as e:
+            logger.error(f"Ошибка парсинга initData: {e}")
 
     return FileResponse("static/index.html")
 
-
 # ======================
-# Health check
+# Health
 # ======================
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
-
+    return {"status": "ok", "message": "MellStarGame ready"}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 10000)), reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
