@@ -1,12 +1,12 @@
 # backend/main.py
 import os
 import json
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Depends, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackContext
@@ -29,14 +29,13 @@ logger = logging.getLogger(__name__)
 # Конфиг
 # ======================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")          # например https://mellstar-backend.onrender.com/webhook
-FRONTEND_URL = os.getenv("FRONTEND_URL", "")    # можно оставить пустым — будем отдавать сами
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "")
 
 # Telegram бот
 application = None
 if BOT_TOKEN:
     application = Application.builder().token(BOT_TOKEN).build()
-
 
 async def start(update: Update, context: CallbackContext):
     web_url = FRONTEND_URL or f"{WEBHOOK_URL.rsplit('/', 1)[0]}/"
@@ -47,10 +46,8 @@ async def start(update: Update, context: CallbackContext):
         parse_mode=ParseMode.HTML
     )
 
-
 if application:
     application.add_handler(CommandHandler("start", start))
-
 
 # ======================
 # Lifespan — установка webhook
@@ -65,7 +62,6 @@ async def lifespan(app: FastAPI):
     if application:
         await application.shutdown()
 
-
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
@@ -76,6 +72,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ======================
+# Подключаем статику
+# ======================
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ======================
 # DB сессия
@@ -83,7 +83,6 @@ app.add_middleware(
 async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         yield session
-
 
 # ======================
 # Webhook для Telegram
@@ -96,7 +95,6 @@ async def telegram_webhook(request: Request):
     update = Update.de_json(data, application.bot)
     await application.process_update(update)
     return {"ok": True}
-
 
 # ======================
 # API: получение данных пользователя
@@ -117,7 +115,6 @@ async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
         "current_checkpoint": result.current_checkpoint,
         "checkpoint_progress": result.checkpoint_progress,
     }
-
 
 # ======================
 # API: сохранение данных пользователя
@@ -147,12 +144,11 @@ async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(g
     await db.commit()
     return {"status": "saved"}
 
-
 # ======================
-# ОТДАЧА ФРОНТЕНДА + АВТОМАТИЧЕСКОЕ СОЗДАНИЕ ПОЛЬЗОВАТЕЛЯ
+# Главная страница — SPA + создание пользователя
 # ======================
-@app.get("/{full_path:path}")
-async def serve_spa(request: Request, full_path: str, db: AsyncSession = Depends(get_db)):
+@app.get("/")
+async def root(request: Request, db: AsyncSession = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-WebApp-InitData", "")
 
     user_id = None
@@ -183,17 +179,10 @@ async def serve_spa(request: Request, full_path: str, db: AsyncSession = Depends
                 )
                 db.add(new_user)
                 await db.commit()
-                logger.info(f"Новый пользователь создан автоматически: {user_id}")
+                logger.info(f"Новый пользователь создан: {user_id}")
 
-    # Отдача статики
-    static_dir = os.path.join(os.path.dirname(__file__), "static")
-    file_path = os.path.join(static_dir, full_path) if full_path else os.path.join(static_dir, "index.html")
-
-    if full_path and os.path.isfile(file_path):
-        return FileResponse(file_path)
-
-    return FileResponse(os.path.join(static_dir, "index.html"))
-
+    # Отдаём index.html
+    return FileResponse("static/index.html")
 
 # ======================
 # Health check
@@ -201,7 +190,6 @@ async def serve_spa(request: Request, full_path: str, db: AsyncSession = Depends
 @app.get("/health")
 async def health():
     return {"status": "ok", "backend": "MellStarGame running"}
-
 
 if __name__ == "__main__":
     import uvicorn
