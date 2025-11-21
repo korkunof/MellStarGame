@@ -1,6 +1,7 @@
-# backend/main.py
+﻿# backend/main.py
 import os
 import json
+import logging                                   # ← ЭТОТ ИМПОРТ БЫЛ ЗАБЫТ
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Depends, HTTPException
@@ -37,6 +38,7 @@ application = None
 if BOT_TOKEN:
     application = Application.builder().token(BOT_TOKEN).build()
 
+
 async def start(update: Update, context: CallbackContext):
     web_url = FRONTEND_URL or f"{WEBHOOK_URL.rsplit('/', 1)[0]}/"
     keyboard = [[InlineKeyboardButton("Играть", web_app=WebAppInfo(url=web_url))]]
@@ -46,8 +48,10 @@ async def start(update: Update, context: CallbackContext):
         parse_mode=ParseMode.HTML
     )
 
+
 if application:
     application.add_handler(CommandHandler("start", start))
+
 
 # ======================
 # Lifespan — установка webhook
@@ -62,6 +66,7 @@ async def lifespan(app: FastAPI):
     if application:
         await application.shutdown()
 
+
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
@@ -73,9 +78,10 @@ app.add_middleware(
 )
 
 # ======================
-# Подключаем статику
+# Статика
 # ======================
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 # ======================
 # DB сессия
@@ -83,6 +89,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         yield session
+
 
 # ======================
 # Webhook для Telegram
@@ -96,8 +103,9 @@ async def telegram_webhook(request: Request):
     await application.process_update(update)
     return {"ok": True}
 
+
 # ======================
-# API: получение данных пользователя
+# API пользователя
 # ======================
 @app.get("/api/user/{user_id}")
 async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
@@ -116,9 +124,7 @@ async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
         "checkpoint_progress": result.checkpoint_progress,
     }
 
-# ======================
-# API: сохранение данных пользователя
-# ======================
+
 @app.post("/api/user/{user_id}")
 async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-WebApp-InitData")
@@ -144,8 +150,9 @@ async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(g
     await db.commit()
     return {"status": "saved"}
 
+
 # ======================
-# Главная страница — SPA + создание пользователя
+# Главная страница + автосоздание пользователя
 # ======================
 @app.get("/")
 async def root(request: Request, db: AsyncSession = Depends(get_db)):
@@ -179,17 +186,18 @@ async def root(request: Request, db: AsyncSession = Depends(get_db)):
                 )
                 db.add(new_user)
                 await db.commit()
-                logger.info(f"Новый пользователь создан: {user_id}")
+                logger.info(f"Создан новый пользователь: {user_id}")
 
-    # Отдаём index.html
     return FileResponse("static/index.html")
+
 
 # ======================
 # Health check
 # ======================
 @app.get("/health")
 async def health():
-    return {"status": "ok", "backend": "MellStarGame running"}
+    return {"status": "ok"}
+
 
 if __name__ == "__main__":
     import uvicorn
