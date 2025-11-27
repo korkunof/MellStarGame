@@ -197,7 +197,7 @@ async def root(request: Request, db: AsyncSession = Depends(get_db)):
 @app.get("/health")
 async def health():
     return {"status": "ok", "message": "MellStarGame ready"}
-
+logger.info("Тест с новой машины!")
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
