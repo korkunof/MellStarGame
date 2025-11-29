@@ -2,6 +2,7 @@
 import os
 import json
 import logging
+import urllib.parse  # Для unquote initData
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Depends, HTTPException
@@ -73,37 +74,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Статика
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ======================
-# DB
+# DB Dependency
 # ======================
-async def get_db() -> AsyncSession:
+def get_db():
     async with AsyncSessionLocal() as session:
         yield session
 
 # ======================
-# Webhook
-# ======================
-@app.post("/webhook")
-async def telegram_webhook(request: Request):
-    if not application:
-        return {"ok": False}
-    data = await request.json()
-    update = Update.de_json(data, application.bot)
-    await application.process_update(update)
-    return {"ok": True}
-
-# ======================
-# API: получение + создание пользователя
+# API Endpoints
 # ======================
 @app.get("/api/user/{user_id}")
 async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
+    logger.info(f"API GET /user/{user_id}: load/create")
     result = await db.get(User, user_id)
     if not result:
-        # ← СОЗДАЁМ, если нет
-        new_user = User(
+        result = User(
             id=user_id,
             level=1,
             free_points=0,
@@ -111,39 +99,22 @@ async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
             payout_bonus=0,
             balance=0.0
         )
-        db.add(new_user)
+        db.add(result)
         await db.commit()
-        logger.info(f"Создан пользователь через GET /api/user/: {user_id}")
-        return {"new_user": True, "created": True}
+        logger.info(f"Created new user via API: {user_id}")
+        return {"new_user": True, "level": result.level, "free_points": result.free_points, "ref_points": result.ref_points, "payout_bonus": result.payout_bonus, "balance": result.balance, "current_boost_level": result.current_boost_level, "current_checkpoint": result.current_checkpoint, "checkpoint_progress": result.checkpoint_progress}
+    else:
+        logger.info(f"Existing user via API: {user_id}")
+        return {"level": result.level, "free_points": result.free_points, "ref_points": result.ref_points, "payout_bonus": result.payout_bonus, "balance": result.balance, "current_boost_level": result.current_boost_level, "current_checkpoint": result.current_checkpoint, "checkpoint_progress": result.checkpoint_progress}
 
-    return {
-        "level": result.level,
-        "free_points": result.free_points,
-        "payout_bonus": result.payout_bonus,
-        "balance": result.balance,
-        "ref_points": result.ref_points,
-        "current_boost_level": result.current_boost_level or 0,
-        "timer_started_at": result.timer_started_at.isoformat() if result.timer_started_at else None,
-        "current_checkpoint": result.current_checkpoint,
-        "checkpoint_progress": result.checkpoint_progress,
-    }
-
-# ======================
-# API: сохранение данных
-# ======================
 @app.post("/api/user/{user_id}")
 async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(get_db)):
-    init_data = request.headers.get("X-Telegram-WebApp-InitData")
-    if not init_data or not verify_telegram_initdata(init_data, BOT_TOKEN):
-        raise HTTPException(403, "Invalid auth")
-
     payload = await request.json()
-
+    logger.info(f"API POST /user/{user_id}: save {list(payload.keys())}")
     user = await db.get(User, user_id)
     if not user:
-        user = User(id=user_id)
-        db.add(user)
-
+        raise HTTPException(status_code=404, detail="User not found")
+    
     allowed = {
         "level", "free_points", "payout_bonus", "balance",
         "ref_points", "current_boost_level", "timer_started_at",
@@ -162,32 +133,54 @@ async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(g
 @app.get("/")
 async def root(request: Request, db: AsyncSession = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-WebApp-InitData", "")
+    logger.info(f"Root GET: init_data len={len(init_data) if init_data else 0}, user-agent={request.headers.get('user-agent', 'unknown')}")
 
-    if init_data and verify_telegram_initdata(init_data, BOT_TOKEN):
-        try:
-            for part in init_data.split("&"):
-                if part.startswith("user="):
-                    user_info = json.loads(part[5:])
-                    user_id = user_info.get("id")
-                    if user_id:
-                        db_user = await db.get(User, user_id)
-                        if not db_user:
-                            new_user = User(
-                                id=user_id,
-                                username=user_info.get("username"),
-                                first_name=user_info.get("first_name"),
-                                level=1,
-                                free_points=0,
-                                ref_points=0,
-                                payout_bonus=0,
-                                balance=0.0
-                            )
-                            db.add(new_user)
-                            await db.commit()
-                            logger.info(f"Создан пользователь через WebApp: {user_id}")
-                    break
-        except Exception as e:
-            logger.error(f"Ошибка парсинга initData: {e}")
+    created = False
+    if init_data:
+        if verify_telegram_initdata(init_data, BOT_TOKEN):
+            logger.info("Root: initData auth OK, parsing...")
+            try:
+                for part in init_data.split("&"):
+                    if part.startswith("user="):
+                        encoded_user = part[5:]
+                        user_str = urllib.parse.unquote(encoded_user)
+                        user_info = json.loads(user_str)
+                        user_id = user_info.get("id")
+                        if user_id:
+                            logger.info(f"Root: parsed user_id={user_id}, first_name={user_info.get('first_name')}, username={user_info.get('username')}")
+                            db_user = await db.get(User, user_id)
+                            if not db_user:
+                                new_user = User(
+                                    id=user_id,
+                                    username=user_info.get("username"),
+                                    first_name=user_info.get("first_name"),
+                                    level=1,
+                                    free_points=0,
+                                    ref_points=0,
+                                    payout_bonus=0,
+                                    balance=0.0
+                                )
+                                db.add(new_user)
+                                await db.commit()
+                                created = True
+                                logger.info(f"Root: CREATED new user {user_id} (first_name={user_info.get('first_name')})")
+                            else:
+                                logger.info(f"Root: existing user {user_id}")
+                            break
+                else:
+                    logger.warning("Root: no 'user=' in initData parts")
+            except json.JSONDecodeError as e:
+                logger.error(f"Root: JSON decode fail after unquote: {e}, raw part[5:]={part[5:][:100] if 'part' in locals() else 'no part'}")
+            except Exception as e:
+                logger.error(f"Root: parse/unexpected error: {e}")
+                await db.rollback()
+        else:
+            logger.warning("Root: initData auth FAIL (HMAC mismatch)")
+    else:
+        logger.warning("Root: no init_data header (not from Telegram WebApp?)")
+
+    if created:
+        logger.info(f"Root: User creation complete for {user_id}")
 
     return FileResponse("static/index.html")
 
@@ -197,6 +190,7 @@ async def root(request: Request, db: AsyncSession = Depends(get_db)):
 @app.get("/health")
 async def health():
     return {"status": "ok", "message": "MellStarGame ready"}
+
 logger.info("Тест с новой машины!")
 if __name__ == "__main__":
     import uvicorn
