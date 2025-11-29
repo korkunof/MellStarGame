@@ -63,8 +63,10 @@ async def lifespan(app: FastAPI):
     if application and WEBHOOK_URL:
         logger.info(f"Initializing application and deleting old webhook...")
         await application.initialize()
-        await application.bot.delete_webhook(drop_pending_updates=True)  # ← ФИКС: Очищаем pending updates, чтобы /start работал
+        await application.bot.delete_webhook(drop_pending_updates=True)  # ФИКС: Очищаем pending updates, чтобы /start работал
         await application.bot.set_webhook(url=WEBHOOK_URL)
+        webhook_info = await application.bot.get_webhook_info()
+        logger.info(f"Webhook info: url={webhook_info.url}, pending_updates={webhook_info.pending_update_count}")  # ← DEBUG: Проверим webhook info
         logger.info(f"Webhook установлен: {WEBHOOK_URL}")
     yield
     if application:
@@ -97,11 +99,23 @@ async def get_db():  # async def для async with
 async def webhook(request: Request):
     logger.info("Webhook POST received")  # DEBUG: Webhook пришёл
     update_json = await request.json()
+    logger.info(f"Webhook JSON keys: {list(update_json.keys())}")  # ← DEBUG: Что в update?
     update = Update.de_json(update_json, application.bot)
     if update:
         await application.process_update(update)
         logger.info(f"Processed update: {update.update_id if update.update_id else 'no id'}")  # DEBUG: Обработано
     return {"status": "ok"}
+
+# ======================
+# Test endpoint for /start (для дебага, удалить потом)
+# ======================
+@app.get("/test-start")
+async def test_start():
+    logger.info("Test /start called (manual)")
+    if application:
+        logger.info("Application exists, simulating start")
+        return {"status": "ok", "message": "Start simulation OK, check logs for handler"}
+    return {"status": "error", "message": "No application"}
 
 # ======================
 # API Endpoints
