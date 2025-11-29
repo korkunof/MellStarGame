@@ -31,15 +31,18 @@ logger = logging.getLogger(__name__)
 # Конфиг
 # ======================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+logger.info(f"BOT_TOKEN loaded, len={len(BOT_TOKEN) if BOT_TOKEN else 0}")  # ← DEBUG: Токен загружен?
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "")
 
 # Telegram бот
 application = None
 if BOT_TOKEN:
+    logger.info("Creating application...")  # ← DEBUG: Создаём app
     application = Application.builder().token(BOT_TOKEN).build()
 
 async def start(update: Update, context: CallbackContext):
+    logger.info("Start command called")  # ← DEBUG: /start сработал
     web_url = FRONTEND_URL or f"{WEBHOOK_URL.rsplit('/', 1)[0]}/"
     keyboard = [[InlineKeyboardButton("Играть", web_app=WebAppInfo(url=web_url))]]
     await update.message.reply_text(
@@ -56,12 +59,15 @@ if application:
 # ======================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Lifespan startup: checking bot...")  # ← DEBUG: Lifespan старт
     if application and WEBHOOK_URL:
+        logger.info(f"Initializing application and setting webhook to {WEBHOOK_URL}")
         await application.initialize()
         await application.bot.set_webhook(url=WEBHOOK_URL)
         logger.info(f"Webhook установлен: {WEBHOOK_URL}")
     yield
     if application:
+        logger.info("Lifespan shutdown: stopping application")
         await application.shutdown()
 
 app = FastAPI(lifespan=lifespan)
@@ -84,13 +90,16 @@ async def get_db():  # async def для async with
         yield session
 
 # ======================
-# Webhook Endpoint для Telegram (фикс 404)
+# Webhook Endpoint для Telegram
 # ======================
 @app.post("/webhook")
 async def webhook(request: Request):
-    update = Update.de_json(await request.json(), application.bot)
+    logger.info("Webhook POST received")  # ← DEBUG: Webhook пришёл
+    update_json = await request.json()
+    update = Update.de_json(update_json, application.bot)
     if update:
         await application.process_update(update)
+        logger.info(f"Processed update: {update.update_id if update.update_id else 'no id'}")  # ← DEBUG: Обработано
     return {"status": "ok"}
 
 # ======================
