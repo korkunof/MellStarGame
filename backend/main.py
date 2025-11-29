@@ -79,7 +79,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # ======================
 # DB Dependency
 # ======================
-def get_db():
+async def get_db():  # ← ФИКС: async def для async with
     async with AsyncSessionLocal() as session:
         yield session
 
@@ -136,6 +136,7 @@ async def root(request: Request, db: AsyncSession = Depends(get_db)):
     logger.info(f"Root GET: init_data len={len(init_data) if init_data else 0}, user-agent={request.headers.get('user-agent', 'unknown')}")
 
     created = False
+    user_id = None  # ← Для лога в конце
     if init_data:
         if verify_telegram_initdata(init_data, BOT_TOKEN):
             logger.info("Root: initData auth OK, parsing...")
