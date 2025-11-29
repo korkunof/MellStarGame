@@ -79,9 +79,19 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # ======================
 # DB Dependency
 # ======================
-async def get_db():  # ← ФИКС: async def для async with
+async def get_db():  # async def для async with
     async with AsyncSessionLocal() as session:
         yield session
+
+# ======================
+# Webhook Endpoint для Telegram (фикс 404)
+# ======================
+@app.post("/webhook")
+async def webhook(request: Request):
+    update = Update.de_json(await request.json(), application.bot)
+    if update:
+        await application.process_update(update)
+    return {"status": "ok"}
 
 # ======================
 # API Endpoints
@@ -136,7 +146,7 @@ async def root(request: Request, db: AsyncSession = Depends(get_db)):
     logger.info(f"Root GET: init_data len={len(init_data) if init_data else 0}, user-agent={request.headers.get('user-agent', 'unknown')}")
 
     created = False
-    user_id = None  # ← Для лога в конце
+    user_id = None  # Для лога в конце
     if init_data:
         if verify_telegram_initdata(init_data, BOT_TOKEN):
             logger.info("Root: initData auth OK, parsing...")
