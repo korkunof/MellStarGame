@@ -55,17 +55,11 @@ function initStatsToggle() {
 
   if (btn) {
     btn.onclick = () => {
-      if (btn.classList.contains("active")) {
-        btn.textContent = "Скрыть";
-        btn.classList.remove("active");
-        if (fullStats) fullStats.style.display = "none";
-        if (collapsedStats) collapsedStats.style.display = "block";
-      } else {
-        btn.textContent = "Полная";
-        btn.classList.add("active");
-        if (fullStats) fullStats.style.display = "grid";
-        if (collapsedStats) collapsedStats.style.display = "none";
-      }
+      const isActive = btn.classList.contains("active");
+      btn.textContent = isActive ? "Скрыть" : "Полная";
+      btn.classList.toggle("active");
+      if (fullStats) fullStats.style.display = isActive ? "none" : "grid";
+      if (collapsedStats) collapsedStats.style.display = isActive ? "block" : "none";
     };
   }
 }
@@ -271,12 +265,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateMain();
   renderAdSlots();
   initUpgradePage();
-});
 
-// Кнопки
-document.getElementById("infoBtn").onclick = () => {
-  alert("Подпишись на все каналы → таймер запустится → зарабатывай звёзды!");
-};
-document.querySelector(".buy-slot").onclick = () => {
-  document.querySelector('[data-page="buy"]').click();
-};
+  // ← ФИКС: Добавь onclick для кнопок после DOM (если fetch задерживается)
+  const infoBtn = document.getElementById("infoBtn");
+  if (infoBtn) infoBtn.onclick = () => {
+    alert("Подпишись на все каналы → таймер запустится → зарабатывай звёзды!");
+  };
+
+  const buySlotBtn = document.querySelector(".buy-slot");
+  if (buySlotBtn) buySlotBtn.onclick = () => {
+    const buyPageBtn = document.querySelector('[data-page="buy"]');
+    if (buyPageBtn) buyPageBtn.click();
+  };
+});
