@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 
 # === Наши модули ===
 from database import engine, AsyncSessionLocal
-from models import User
+from models import User, Base  # Добавил Base для create_all
 from auth import verify_telegram_initdata
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,6 +60,12 @@ if application:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Lifespan startup: checking bot...")  # DEBUG: Lifespan старт
+    # ========
+    # Создаем таблицы (автоматически на старте)
+    # ========
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Tables created if not exist")  # DEBUG: Таблицы созданы
     if application and WEBHOOK_URL:
         logger.info(f"Initializing application and deleting old webhook...")
         await application.initialize()
