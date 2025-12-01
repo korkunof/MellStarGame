@@ -43,226 +43,128 @@ document.querySelectorAll(".nav-item").forEach(btn => {
   };
 });
 
-document.getElementById("applyBoostNavBtn").onclick = () => {
-  document.querySelector('[data-page="upgrade"]').click();
-  setTimeout(() => document.getElementById("boostSection")?.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
-};
-
 // ===================================
-// [ПЕРЕКЛЮЧЕНИЕ СТАТИСТИКИ]
+// [СТАТИСТИКА]
 // ===================================
 function initStatsToggle() {
   const btn = document.getElementById("statsToggleBtn");
-  const grid = document.querySelector(".stats-grid");
-  const collapsed = document.getElementById("collapsedStats");
+  const fullStats = document.getElementById("fullStats");
+  const collapsedStats = document.getElementById("collapsedStats");
 
-  btn.classList.add("active");
-  btn.textContent = "Полная";
-  grid.style.display = "grid";
-  collapsed.style.display = "none";
-
-  btn.addEventListener("click", () => {
+  btn.onclick = () => {
     if (btn.classList.contains("active")) {
+      btn.textContent = "Скрыть";
       btn.classList.remove("active");
-      btn.textContent = "Краткая";
-      grid.style.display = "none";
-      collapsed.style.display = "block";
+      fullStats.style.display = "none";
+      collapsedStats.style.display = "block";
     } else {
-      btn.classList.add("active");
       btn.textContent = "Полная";
-      grid.style.display = "grid";
-      collapsed.style.display = "none";
+      btn.classList.add("active");
+      fullStats.style.display = "grid";
+      collapsedStats.style.display = "none";
     }
-  });
+  };
 }
 
-// ===================================
-// [ГЛАВНАЯ — ОБНОВЛЕНИЕ СТАТИСТИКИ]
-// ===================================
 function updateMain() {
   document.getElementById("level").textContent = user.level;
-  document.getElementById("levelSpent").textContent = user.level - 1;
   document.getElementById("freePoints").textContent = user.freePoints;
   document.getElementById("refPoints").textContent = user.refPoints;
-  document.getElementById("boostLevel").textContent = user.boostLevel * 25;
+  document.getElementById("payoutBonus").textContent = user.payoutBonus;
+  document.getElementById("balance").textContent = user.balance.toFixed(1);
+  document.getElementById("progress").textContent = user.progress.toFixed(1);
+  document.getElementById("boostLevel").textContent = user.boostLevel;
 
-  const active = user.subSlots.filter(s => s.status === "active").length;
-  document.getElementById("activeSlots").textContent = `${active} / 5`;
+  const progressBar = document.getElementById("progressBar");
+  progressBar.style.width = user.progress + "%";
 
-  const now = Date.now();
-  const nearest = user.subSlots
-    .filter(s => s.status === "active" && s.expires)
-    .map(s => s.expires)
-    .sort((a, b) => a - b)[0];
-  document.getElementById("nextSlotTime").textContent = nearest ? formatTimeLeft(nearest - now) : "—";
-
-  const speed = (1.338 - (user.level - 1) * 0.089).toFixed(3);
-  document.getElementById("timerSpeed").textContent = speed;
-  document.getElementById("speedMini").textContent = speed;
-
-  renderAdSlotsMain();
+  const notifyCheckbox = document.getElementById("notifyCheckbox");
+  notifyCheckbox.checked = user.notifyEnabled || false;
 }
 
 // ===================================
-// [ОТРИСОВКА СЛОТОВ]
+// [СЛОТЫ]
 // ===================================
-function renderAdSlotsMain() {
-  const cont = document.getElementById("adSlotsContainer");
-  cont.innerHTML = "";
-  if (user.adSlots.length === 0) {
-    cont.innerHTML = `<div class="slot-card empty" style="justify-content:center;font-style:italic;">Нет купленных слотов</div>`;
-    return;
-  }
-  user.adSlots.forEach(slot => {
-    cont.innerHTML += `<div class="slot-card active"><span>${slot.name}</span><span>${slot.showsLeft} показов</span></div>`;
-  });
-}
-
 function renderAdSlots() {
-  const container = document.getElementById("adSlotsGrid");
-  container.innerHTML = "";
-  user.adSlots.forEach(slot => {
-    container.innerHTML += `<div class="slot-card active"><span>${slot.name}</span><span>${slot.showsLeft} показов</span></div>`;
+  const slotsContainer = document.getElementById("slotsContainer");
+  slotsContainer.innerHTML = "";
+
+  user.subSlots.forEach(slot => {
+    const slotCard = document.createElement("div");
+    slotCard.className = `slot-card ${slot.status}`;
+
+    if (slot.status === "empty") {
+      slotCard.innerHTML = "Свободно";
+    } else if (slot.status === "active") {
+      const timeLeft = slot.expires - Date.now();
+      const minutes = Math.floor(timeLeft / 60000);
+      slotCard.innerHTML = `Таймер: ${minutes} мин`;
+    } else if (slot.status === "need_subscribe") {
+      slotCard.innerHTML = "Подпишись";
+    } else {
+      slotCard.innerHTML = "Завершено";
+    }
+
+    slotsContainer.appendChild(slotCard);
   });
-  for (let i = user.adSlots.length; i < 5; i++) {
-    container.innerHTML += `<div class="slot-card empty">Пусто</div>`;
-  }
 }
 
 // ===================================
-// [ФОРМАТИРОВАНИЕ ВРЕМЕНИ]
-// ===================================
-function formatTimeLeft(ms) {
-  const seconds = Math.floor(ms / 1000);
-  const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
-  const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-  const s = String(seconds % 60).padStart(2, '0');
-  return `${h}:${m}:${s}`;
-}
-
-// ===================================
-// [ПРОКАЧКА — ИНИЦИАЛИЗАЦИЯ СТРАНИЦЫ]
+// [ПРОКАЧКА]
 // ===================================
 function initUpgradePage() {
-  const availablePointsSpan = document.getElementById("availablePoints");
+  const boostLevels = document.getElementById("boostLevels");
+  boostLevels.innerHTML = "";
 
-  function updateLevelDisplay() {
-    document.getElementById("currLevelDisplay").textContent = user.level;
-    document.getElementById("levelSpentHeader").textContent = user.level - 1;
-    document.getElementById("freePointsHeader").textContent = user.freePoints;
-    availablePointsSpan.textContent = user.freePoints;
-
-    const maxSlots = 5 + Math.floor((user.level - 1) / 2);
-    const maxStars = 10 + Math.floor((user.level - 1) / 2);
-    const bonus = (user.level - 1) * 0.089;
-
-    document.querySelectorAll(".stats-box p strong")[0].innerHTML = `<span class="pink">${maxSlots}</span> из 28`;
-    document.querySelectorAll(".stats-box p strong")[1].innerHTML = `<span class="pink">${10 + user.payoutBonus}</span>⭐ из ${maxStars}`;
-    document.querySelectorAll(".stats-box p strong")[2].innerHTML = `<span class="pink">+${bonus.toFixed(3)}</span> из +4,005`;
-
-    document.getElementById("resetLevelBtn").disabled = user.level <= 1;
-    document.getElementById("addLevelBtn").disabled = user.level >= 45 || user.freePoints <= 0;
-  }
-
-  document.getElementById("resetLevelBtn").onclick = () => {
-    if (user.level <= 1) return;
-    user.freePoints += (user.level - 1);
-    user.level = 1;
-    updateLevelDisplay();
-    updateMain();
-  };
-
-  document.getElementById("addLevelBtn").onclick = () => {
-    if (user.level >= 45 || user.freePoints <= 0) return;
-    user.level++;
-    user.freePoints--;
-    updateLevelDisplay();
-    updateMain();
-  };
-
-  // Разгон
-  document.getElementById("refPointsDisplay").textContent = user.refPoints;
-
-  document.querySelectorAll(".boost-btn").forEach(btn => {
+  for (let i = 1; i <= 10; i++) {
+    const btn = document.createElement("button");
+    btn.className = `boost-btn ${i <= user.boostLevel ? "active" : ""}`;
+    btn.textContent = `Lv.${i}`;
     btn.onclick = () => {
-      document.querySelectorAll(".boost-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
+      if (i > user.boostLevel && user.freePoints >= i * 10) {
+        user.boostLevel = i;
+        user.freePoints -= i * 10;
+        updateMain();
+        initUpgradePage();
+        tg.showAlert(`Буст Lv.${i} активирован!`);
+      } else if (i > user.boostLevel) {
+        tg.showAlert("Недостаточно очков!");
+      }
     };
-  });
-
-  document.getElementById("applyBoost").onclick = () => {
-    const selected = document.querySelector(".boost-btn.active");
-    if (!selected) return alert("Выбери уровень разгона!");
-    const level = parseInt(selected.dataset.level);
-    const cost = level * 4;
-    if (user.refPoints < cost) return alert("Недостаточно реф. очков!");
-    user.boostLevel = level;
-    user.refPoints -= cost;
-    document.getElementById("refPointsDisplay").textContent = user.refPoints;
-    updateMain();
-    alert(`Разгон ${level} ур. применён! (+${level * 25}%)`);
-  };
-
-  document.getElementById("inviteFriendBtn").onclick = () => {
-    const link = `https://t.me/MellStarGameBot?start=ref_${tg.initDataUnsafe.user.id}`;
-    tg.shareUrl(link, "Пригласи друга и получи очко реферала!");
-  };
-
-  // Доп. выплата
-  function updatePayoutCost() {
-    const cost = payoutCosts[user.payoutBonus] || 9999;
-    document.getElementById("payoutCost").textContent = cost;
-    document.getElementById("currentPayout").textContent = 10 + user.payoutBonus;
-    document.getElementById("extraStarsBought").textContent = user.payoutBonus;
+    boostLevels.appendChild(btn);
   }
 
-  document.getElementById("buyPayout").onclick = () => {
-    const cost = payoutCosts[user.payoutBonus] || 9999;
-    if (user.balance < cost) return alert("Недостаточно звёзд!");
-    if (!confirm(`Купить +1 звезду за ${cost} ⭐?`)) return;
-    user.balance -= cost;
-    user.payoutBonus++;
-    updatePayoutCost();
-    updateMain();
+  const applyBtn = document.getElementById("applyBoost");
+  applyBtn.onclick = () => {
+    if (user.freePoints >= 50) {
+      user.currentBoostLevel += 1;
+      user.freePoints -= 50;
+      updateMain();
+      tg.showAlert("Буст применён!");
+    } else {
+      tg.showAlert("Недостаточно очков!");
+    }
   };
-
-  updateLevelDisplay();
-  updatePayoutCost();
-
-  const activeBoost = document.querySelector(`.boost-btn[data-level="${user.boostLevel}"]`);
-  if (activeBoost) activeBoost.classList.add("active");
 }
 
 // ===================================
-// [СТРАНИЦА ПОКУПКИ СЛОТА]
+// [КУПЛЯ СЛОТОВ]
 // ===================================
 function initBuyPage() {
-  const name = document.getElementById("slotName");
-  const link = document.getElementById("slotLink");
-  const type = document.getElementById("slotType");
-  const shows = document.getElementById("showsSelect");
+  const name = document.getElementById("adName");
+  const link = document.getElementById("adLink");
+  const type = document.getElementById("adType");
+  const shows = document.getElementById("adShows");
+  const totalCalc = document.getElementById("totalCalc");
   const resetBtn = document.getElementById("resetBtn");
   const payBtn = document.getElementById("payBtn");
 
-  const calcType = document.getElementById("calcType");
-  const typeCost = document.getElementById("typeCost");
-  const calcShows = document.getElementById("calcShows");
-  const showsCost = document.getElementById("showsCost");
-  const totalCalc = document.getElementById("totalCalc");
-
   function updateCalc() {
-    const showsValue = parseInt(shows.value);
-    const isVip = type.value === "VIP слот";
-    const platformCost = 100;
-    const typeCostValue = isVip ? 2000 : 1000;
-    const showsCostValue = showsValue === 1000 ? 500 : showsValue === 2000 ? 1000 : 2500;
-    const total = platformCost + typeCostValue + showsCostValue;
-
-    calcType.textContent = type.value;
-    typeCost.textContent = typeCostValue;
-    calcShows.textContent = showsValue;
-    showsCost.textContent = showsCostValue;
-    totalCalc.textContent = total;
+    const basePrice = 1.0;
+    const typeMultiplier = type.value === "стандарт" ? 1 : type.value === "vip" ? 1.5 : 2.0;
+    const showsMultiplier = parseInt(shows.value) / 1000;
+    const total = basePrice * typeMultiplier * showsMultiplier * 1000;
+    totalCalc.textContent = Math.ceil(total);
   }
 
   resetBtn.onclick = () => {
@@ -302,8 +204,45 @@ function initBuyPage() {
 // ===================================
 // [ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ]
 // ===================================
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   initStatsToggle();
+
+  // ← НОВОЕ: Создай/загрузи user из backend
+  const userId = tg.initDataUnsafe?.user?.id;
+  if (userId) {
+    try {
+      const response = await fetch(`https://mellstar-backend.onrender.com/api/user/${userId}`, {
+        method: 'GET',
+        headers: {
+          'X-Telegram-WebApp-InitData': tg.initData || ''  // Для verify в backend
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.new_user) {
+          tg.showAlert('Аккаунт создан! Добро пожаловать!');
+        }
+        // Замени моки реальными данными
+        user = {
+          level: data.level || 1,
+          freePoints: data.free_points || 0,
+          refPoints: data.ref_points || 0,
+          payoutBonus: data.payout_bonus || 0,
+          balance: data.balance || 0.0,
+          progress: data.checkpoint_progress || 0,
+          boostLevel: data.current_boost_level || 0,
+          adSlots: [],
+          subSlots: Array(5).fill(null).map((_, i) => ({ id: i, status: "empty", expires: null }))
+        };
+        console.log('User from API:', user);  // F12 Console для дебага
+      } else {
+        console.error('API error:', response.status);
+      }
+    } catch (error) {
+      console.error('Fetch error:', error);
+    }
+  }
+
   updateMain();
   renderAdSlots();
   initUpgradePage();

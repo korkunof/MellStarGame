@@ -127,7 +127,11 @@ async def test_start():
 # API Endpoints
 # ======================
 @app.get("/api/user/{user_id}")
-async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
+async def get_user(user_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-WebApp-InitData", "")
+    logger.info(f"API GET /user/{user_id}: init_data len={len(init_data) if init_data else 0}")  # DEBUG
+    if init_data and not verify_telegram_initdata(init_data, BOT_TOKEN):
+        raise HTTPException(status_code=403, detail="Auth failed")
     logger.info(f"API GET /user/{user_id}: load/create")
     result = await db.get(User, user_id)
     if not result:
