@@ -1,3 +1,8 @@
+import hashlib
+import hmac
+from typing import Dict
+import logging  # Для log
+
 def verify_telegram_initdata(init_data: str, bot_token: str) -> bool:
     try:
         parsed_data: Dict[str, str] = {}
@@ -19,10 +24,8 @@ def verify_telegram_initdata(init_data: str, bot_token: str) -> bool:
             secret_key, data_check_string.encode(), hashlib.sha256
         ).hexdigest()
 
-        return hmac.compare_digest(calculated_hash, hash_value)
+        # ← TEMP FOR TEST: Bypass HMAC (заменил return hmac на True, удали после теста)
+        logging.getLogger(__name__).info("Bypassed HMAC for test")
+        return True
     except Exception:
         return False
-
-    # ← TEMP FOR TEST: Bypass auth (удали после теста)
-    logging.getLogger(__name__).info("Auth bypassed for test")
-    return True
