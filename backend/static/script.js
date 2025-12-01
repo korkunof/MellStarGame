@@ -6,8 +6,7 @@ tg.ready();
 tg.expand();
 
 const username = tg.initDataUnsafe?.user?.first_name || "Гость";
-const usernameEl = document.getElementById("username");
-if (usernameEl) usernameEl.textContent = username;
+document.getElementById("username").textContent = username;
 
 // ===================================
 // [ДАННЫЕ ПОЛЬЗОВАТЕЛЯ]
@@ -52,50 +51,35 @@ function initStatsToggle() {
   const fullStats = document.getElementById("fullStats");
   const collapsedStats = document.getElementById("collapsedStats");
 
-  if (btn) {
-    btn.onclick = () => {
-      if (btn.classList.contains("active")) {
-        btn.textContent = "Скрыть";
-        btn.classList.remove("active");
-        if (fullStats) fullStats.style.display = "none";
-        if (collapsedStats) collapsedStats.style.display = "block";
-      } else {
-        btn.textContent = "Полная";
-        btn.classList.add("active");
-        if (fullStats) fullStats.style.display = "grid";
-        if (collapsedStats) collapsedStats.style.display = "none";
-      }
-    };
-  }
+  btn.onclick = () => {
+    if (btn.classList.contains("active")) {
+      btn.textContent = "Скрыть";
+      btn.classList.remove("active");
+      fullStats.style.display = "none";
+      collapsedStats.style.display = "block";
+    } else {
+      btn.textContent = "Полная";
+      btn.classList.add("active");
+      fullStats.style.display = "grid";
+      collapsedStats.style.display = "none";
+    }
+  };
 }
 
 function updateMain() {
-  const levelEl = document.getElementById("level");
-  if (levelEl) levelEl.textContent = user.level;
-
-  const freePointsEl = document.getElementById("freePoints");
-  if (freePointsEl) freePointsEl.textContent = user.freePoints;
-
-  const refPointsEl = document.getElementById("refPoints");
-  if (refPointsEl) refPointsEl.textContent = user.refPoints;
-
-  const payoutBonusEl = document.getElementById("payoutBonus");
-  if (payoutBonusEl) payoutBonusEl.textContent = user.payoutBonus;
-
-  const balanceEl = document.getElementById("balance");
-  if (balanceEl) balanceEl.textContent = user.balance.toFixed(1);
-
-  const progressEl = document.getElementById("progress");
-  if (progressEl) progressEl.textContent = user.progress.toFixed(1);
-
-  const boostLevelEl = document.getElementById("boostLevel");
-  if (boostLevelEl) boostLevelEl.textContent = user.boostLevel;
+  document.getElementById("level").textContent = user.level;
+  document.getElementById("freePoints").textContent = user.freePoints;
+  document.getElementById("refPoints").textContent = user.refPoints;
+  document.getElementById("payoutBonus").textContent = user.payoutBonus;
+  document.getElementById("balance").textContent = user.balance.toFixed(1);
+  document.getElementById("progress").textContent = user.progress.toFixed(1);
+  document.getElementById("boostLevel").textContent = user.boostLevel;
 
   const progressBar = document.getElementById("progressBar");
-  if (progressBar) progressBar.style.width = user.progress + "%";
+  progressBar.style.width = user.progress + "%";
 
   const notifyCheckbox = document.getElementById("notifyCheckbox");
-  if (notifyCheckbox) notifyCheckbox.checked = user.notifyEnabled || false;
+  notifyCheckbox.checked = user.notifyEnabled || false;
 }
 
 // ===================================
@@ -103,8 +87,6 @@ function updateMain() {
 // ===================================
 function renderAdSlots() {
   const slotsContainer = document.getElementById("slotsContainer");
-  if (!slotsContainer) return;
-
   slotsContainer.innerHTML = "";
 
   user.subSlots.forEach(slot => {
@@ -132,8 +114,6 @@ function renderAdSlots() {
 // ===================================
 function initUpgradePage() {
   const boostLevels = document.getElementById("boostLevels");
-  if (!boostLevels) return;
-
   boostLevels.innerHTML = "";
 
   for (let i = 1; i <= 10; i++) {
@@ -155,18 +135,16 @@ function initUpgradePage() {
   }
 
   const applyBtn = document.getElementById("applyBoost");
-  if (applyBtn) {
-    applyBtn.onclick = () => {
-      if (user.freePoints >= 50) {
-        user.currentBoostLevel += 1;
-        user.freePoints -= 50;
-        updateMain();
-        tg.showAlert("Буст применён!");
-      } else {
-        tg.showAlert("Недостаточно очков!");
-      }
-    };
-  }
+  applyBtn.onclick = () => {
+    if (user.freePoints >= 50) {
+      user.currentBoostLevel += 1;
+      user.freePoints -= 50;
+      updateMain();
+      tg.showAlert("Буст применён!");
+    } else {
+      tg.showAlert("Недостаточно очков!");
+    }
+  };
 }
 
 // ===================================
@@ -180,8 +158,6 @@ function initBuyPage() {
   const totalCalc = document.getElementById("totalCalc");
   const resetBtn = document.getElementById("resetBtn");
   const payBtn = document.getElementById("payBtn");
-
-  if (!name || !link || !type || !shows || !totalCalc || !resetBtn || !payBtn) return;
 
   function updateCalc() {
     const basePrice = 1.0;
