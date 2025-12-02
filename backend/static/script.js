@@ -123,7 +123,7 @@ function renderAdSlots() {
     slotsContainer.appendChild(slotCard);
   });
 
-  // ← Логика таймера
+  // Логика таймера (если нужно)
   const activeSlots = user.subSlots.filter(s => s.status === "active").length;
   if (activeSlots === user.current_slot_count && !timerInterval) {
     timerInterval = setInterval(() => {
@@ -303,7 +303,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderAdSlots();
   initUpgradePage();
 
-  // ← ФИКС: Добавь onclick для кнопок после DOM
+  // ← ФИКС: Добавь onclick для кнопок после DOM (если fetch задерживается)
   const infoBtn = document.getElementById("infoBtn");
   if (infoBtn) infoBtn.onclick = () => {
     alert("Подпишись на все каналы → таймер запустится → зарабатывай звёзды!");

@@ -22,6 +22,7 @@ from database import engine, AsyncSessionLocal
 from models import User, Base, PurchasedAdSlot, UserSlot  # Добавил PurchasedAdSlot, UserSlot
 from auth import verify_telegram_initdata
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select  # ← ФИКС: Import select для db.execute(select(User))
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
