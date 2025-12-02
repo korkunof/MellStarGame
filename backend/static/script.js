@@ -96,6 +96,8 @@ function updateMain() {
 // ===================================
 // [СЛОТЫ]
 // ===================================
+let timerInterval = null;  // Для таймера
+
 function renderAdSlots() {
   const slotsContainer = document.getElementById("slotsContainer");
   if (!slotsContainer) return;
@@ -120,6 +122,31 @@ function renderAdSlots() {
 
     slotsContainer.appendChild(slotCard);
   });
+
+  // ← Логика таймера
+  const activeSlots = user.subSlots.filter(s => s.status === "active").length;
+  if (activeSlots === user.current_slot_count && !timerInterval) {
+    timerInterval = setInterval(() => {
+      user.progress += user.timer_speed_multiplier * 0.1;  // +0.1% в секунду
+      updateMain();
+      if (user.progress >= 100) {
+        clearInterval(timerInterval);
+        user.balance += user.payout_rate * 10;  // Начисление
+        tg.showAlert("Цикл завершён! +10 ⭐");
+        // POST save
+        fetch(`/api/user/${tg.initDataUnsafe.user.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Telegram-WebApp-InitData': tg.initData },
+          body: JSON.stringify({ progress: 0, balance: user.balance })
+        });
+      }
+    }, 1000);
+  } else if (activeSlots < user.current_slot_count) {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  }
 }
 
 // ===================================
@@ -165,7 +192,7 @@ function initUpgradePage() {
 }
 
 // ===================================
-// [КУПЛЯ СЛОТОВ]
+// [КУПЛЯ СЛОТОВ] (теперь создание слота, free)
 // ===================================
 function initBuyPage() {
   const name = document.getElementById("adName");
@@ -179,11 +206,8 @@ function initBuyPage() {
   if (!name || !link || !type || !shows || !totalCalc || !resetBtn || !payBtn) return;
 
   function updateCalc() {
-    const basePrice = 1.0;
-    const typeMultiplier = type.value === "стандарт" ? 1 : type.value === "vip" ? 1.5 : 2.0;
-    const showsMultiplier = parseInt(shows.value) / 1000;
-    const total = basePrice * typeMultiplier * showsMultiplier * 1000;
-    totalCalc.textContent = Math.ceil(total);
+    const basePrice = 0;  // Free тест
+    totalCalc.textContent = basePrice;  // 0 ⭐
   }
 
   resetBtn.onclick = () => {
@@ -199,24 +223,37 @@ function initBuyPage() {
       alert("Заполните название и ссылку!");
       return;
     }
-    const total = parseInt(totalCalc.textContent);
-    if (user.balance < total) {
-      alert(`Недостаточно звёзд! Нужно: ${total} ⭐`);
-      return;
-    }
-    if (!confirm(`Оплатить ${total} ⭐?`)) return;
+    const channelUsername = name.value.trim().startsWith('@') ? name.value.trim() : `@${name.value.trim()}`;
+    const requiredShows = parseInt(shows.value) || 1000;
+    if (!confirm(`Создать слот: ${channelUsername}, показов: ${requiredShows}?`)) return;
 
-    user.balance -= total;
-    user.adSlots.push({
-      name: name.value,
-      showsLeft: parseInt(shows.value),
-      link: link.value,
-      type: type.value
+    // ← НОВОЕ: POST /api/slot (free)
+    fetch(`https://mellstar-backend.onrender.com/api/slot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Telegram-WebApp-InitData': tg.initData },
+      body: JSON.stringify({
+        advertiser_id: tg.initDataUnsafe.user.id,  // Твой ID
+        channel_username: channelUsername,
+        channel_name: link.value.trim(),  // Название
+        link: link.value.trim(),  // Ссылка на пост
+        slot_type: type.value,
+        required_shows: requiredShows
+      })
+    }).then(response => {
+      if (response.ok) {
+        return response.json();
+      } else {
+        throw new Error('Error creating slot');
+      }
+    }).then(data => {
+      tg.showAlert(`Слот создан! ID: ${data.slot_id}`);
+      resetBtn.click();
+      document.querySelector('[data-page="home"]').click();
+      renderAdSlots();  // Обнови слоты
+    }).catch(error => {
+      console.error('Create slot error:', error);
+      tg.showAlert('Ошибка создания слота');
     });
-
-    alert("Слот куплен!");
-    resetBtn.click();
-    document.querySelector('[data-page="home"]').click();
   };
 }
 
@@ -251,7 +288,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           progress: data.checkpoint_progress || 0,
           boostLevel: data.current_boost_level || 0,
           adSlots: [],
-          subSlots: Array(5).fill(null).map((_, i) => ({ id: i, status: "empty", expires: null }))
+          subSlots: Array(data.current_slot_count || 5).fill(null).map((_, i) => ({ id: i, status: "empty", expires: null }))
         };
         console.log('User from API:', user);  // F12 Console для дебага
       } else {
@@ -266,7 +303,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderAdSlots();
   initUpgradePage();
 
-  // ← ФИКС: Добавь onclick для кнопок после DOM (если fetch задерживается)
+  // ← ФИКС: Добавь onclick для кнопок после DOM
   const infoBtn = document.getElementById("infoBtn");
   if (infoBtn) infoBtn.onclick = () => {
     alert("Подпишись на все каналы → таймер запустится → зарабатывай звёзды!");

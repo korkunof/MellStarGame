@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 
 # === Наши модули ===
 from database import engine, AsyncSessionLocal
-from models import User, Base  # Добавил Base для create_all
+from models import User, Base, PurchasedAdSlot, UserSlot  # Добавил PurchasedAdSlot, UserSlot
 from auth import verify_telegram_initdata
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -139,9 +139,13 @@ async def get_user(user_id: int, request: Request, db: AsyncSession = Depends(ge
             id=user_id,
             level=1,
             free_points=0,
+            distributed_points=0,  # Новое
             ref_points=0,
             payout_bonus=0,
-            balance=0.0
+            balance=0.0,
+            current_slot_count=5,  # Новое
+            timer_speed_multiplier=1.0,  # Новое
+            payout_rate=1.0  # Новое
         )
         db.add(result)
         await db.commit()
@@ -170,6 +174,45 @@ async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(g
 
     await db.commit()
     return {"status": "saved"}
+
+# ======================
+# API для создания слота (новое)
+# ======================
+@app.post("/api/slot")
+async def create_slot(request: Request, db: AsyncSession = Depends(get_db)):
+    payload = await request.json()
+    logger.info(f"API POST /slot: {payload}")
+    # Верификация (твой админ ID, для теста)
+    if payload.get("advertiser_id") != 1234567890:  # Замени на твой Telegram ID
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Создай PurchasedAdSlot
+    new_slot = PurchasedAdSlot(
+        advertiser_id=payload["advertiser_id"],
+        channel_username=payload["channel_username"],
+        channel_name=payload["channel_name"],
+        link=payload["link"],
+        slot_type=payload.get("slot_type", "standard"),
+        required_shows=payload.get("required_shows", 1000),  # Free тест
+        price_paid=0  # Free
+    )
+    db.add(new_slot)
+    await db.flush()  # Получи ID
+    slot_id = new_slot.id
+
+    # Добавь UserSlot для всех users (status="active")
+    users = await db.execute(select(User))
+    for u in users.scalars():
+        user_slot = UserSlot(
+            user_id=u.id,
+            slot_id=slot_id,
+            status="active"
+        )
+        db.add(user_slot)
+    await db.commit()
+
+    logger.info(f"Created slot ID {slot_id}, linked to {len(users.scalars())} users")
+    return {"status": "created", "slot_id": slot_id}
 
 # ======================
 # Главная + автосоздание при открытии WebApp
@@ -201,9 +244,13 @@ async def root(request: Request, db: AsyncSession = Depends(get_db)):
                                     first_name=user_info.get("first_name"),
                                     level=1,
                                     free_points=0,
+                                    distributed_points=0,
                                     ref_points=0,
                                     payout_bonus=0,
-                                    balance=0.0
+                                    balance=0.0,
+                                    current_slot_count=5,
+                                    timer_speed_multiplier=1.0,
+                                    payout_rate=1.0
                                 )
                                 db.add(new_user)
                                 await db.commit()
