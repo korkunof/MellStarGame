@@ -1,17 +1,14 @@
 ﻿// ===================================
-// [ИНИЦИАЛИЗАЦИЯ TELEGRAM WEB APP]
+// script.js — исправленная версия (замена целиком)
 // ===================================
-const tg = window.Telegram.WebApp;
-tg.ready();
-tg.expand();
+
+const tg = window.Telegram?.WebApp || { initDataUnsafe: {}, initData: '', showAlert: (m)=>alert(m) };
+try { tg.ready && tg.ready(); tg.expand && tg.expand(); } catch(e){}
 
 const username = tg.initDataUnsafe?.user?.first_name || "Гость";
 const usernameEl = document.getElementById("username");
 if (usernameEl) usernameEl.textContent = username;
 
-// ===================================
-// [ДАННЫЕ ПОЛЬЗОВАТЕЛЯ]
-// ===================================
 let user = {
   level: 2,
   freePoints: 1,
@@ -22,282 +19,387 @@ let user = {
   balance: 9999,
   progress: 0,
   adSlots: [],
-  subSlots: Array(5).fill(null).map((_, i) => ({ id: i, status: "empty", expires: null }))
+  subSlots: Array(5).fill(null).map((_, i) => ({ id: i, status: "empty", expires: null })),
+  current_slot_count: 5,
+  timer_speed_multiplier: 1.0,
+  payout_rate: 1.0
 };
 
-const payoutCosts = [10,11,13,17,24,36,58,98,127,166,215,280,364,473,615,677,744,819,860,903,948,995,1045,1066,1087,1109,1131,1154,1177,1188,1200,1212,1224,1237,1249,1261,1274,1287,1300];
+function qs(...selectors) {
+  for (const s of selectors) {
+    if (!s) continue;
+    if (s.startsWith('#')) {
+      const el = document.getElementById(s.slice(1));
+      if (el) return el;
+    }
+    const el2 = document.querySelector(s);
+    if (el2) return el2;
+  }
+  return null;
+}
 
-// ===================================
-// [НАВИГАЦИЯ]
-// ===================================
+function setCursor(el) { if (el) el.style.cursor = 'pointer'; }
+function safeText(id, v){ const e = document.getElementById(id); if(e) e.textContent = v; }
+
+// NAV
 document.querySelectorAll(".nav-item").forEach(btn => {
-  btn.style.cursor = "pointer";  // ← ФИКС: Hover эффект (pointer)
-  btn.onmouseover = () => btn.style.opacity = "0.8";  // ← ФИКС: Hover реакция
+  setCursor(btn);
+  btn.onmouseover = () => btn.style.opacity = "0.85";
   btn.onmouseout = () => btn.style.opacity = "1";
   btn.onclick = () => {
-    console.log("Nav clicked:", btn.dataset.page);  // DEBUG
     document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
     const pageEl = document.getElementById(btn.dataset.page);
     if (pageEl) pageEl.classList.add("active");
 
-    if (btn.dataset.page === "home") updateMain();
+    if (btn.dataset.page === "home") {
+      updateMain();
+      renderHomeSlotsList();
+    }
     if (btn.dataset.page === "subscriptions") renderAdSlots();
     if (btn.dataset.page === "upgrade") initUpgradePage();
     if (btn.dataset.page === "buy") initBuyPage();
   };
 });
 
-// ===================================
-// [СТАТИСТИКА]
-// ===================================
-function initStatsToggle() {
+// STATS toggle: uses .stats-grid as "full"
+function initStatsToggle(){
   const btn = document.getElementById("statsToggleBtn");
-  const fullStats = document.getElementById("fullStats");
+  const fullStats = qs('.stats-grid', '#fullStats', '#statsContainer');
   const collapsedStats = document.getElementById("collapsedStats");
-
-  if (btn) {
-    btn.style.cursor = "pointer";  // ← ФИКС: Hover
-    btn.onmouseover = () => btn.style.opacity = "0.8";
-    btn.onmouseout = () => btn.style.opacity = "1";
-    btn.onclick = () => {
-      const isActive = btn.classList.contains("active");
-      btn.textContent = isActive ? "Скрыть" : "Полная";
-      btn.classList.toggle("active");
-      if (fullStats) fullStats.style.display = isActive ? "none" : "grid";
-      if (collapsedStats) collapsedStats.style.display = isActive ? "block" : "none";
-    };
-  }
-}
-
-function updateMain() {
-  const levelEl = document.getElementById("level");
-  if (levelEl) levelEl.textContent = user.level;
-
-  const freePointsEl = document.getElementById("freePoints");
-  if (freePointsEl) freePointsEl.textContent = user.freePoints;
-
-  const refPointsEl = document.getElementById("refPoints");
-  if (refPointsEl) refPointsEl.textContent = user.refPoints;
-
-  const payoutBonusEl = document.getElementById("payoutBonus");
-  if (payoutBonusEl) payoutBonusEl.textContent = user.payoutBonus;
-
-  const balanceEl = document.getElementById("balance");
-  if (balanceEl) balanceEl.textContent = user.balance.toFixed(1);
-
-  const progressEl = document.getElementById("progress");
-  if (progressEl) progressEl.textContent = user.progress.toFixed(1);
-
-  const boostLevelEl = document.getElementById("boostLevel");
-  if (boostLevelEl) boostLevelEl.textContent = user.boostLevel;
-
-  const progressBar = document.getElementById("progressBar");
-  if (progressBar) progressBar.style.width = user.progress + "%";
-
-  const notifyCheckbox = document.getElementById("notifyCheckbox");
-  if (notifyCheckbox) notifyCheckbox.checked = user.notifyEnabled || false;
-}
-
-// ===================================
-// [СЛОТЫ]
-// ===================================
-let timerInterval = null;  // Для таймера
-
-function renderAdSlots() {
-  console.log("Rendering slots:", user.subSlots.length);  // DEBUG: Вызвано?
-  const slotsContainer = document.getElementById("slotsContainer");
-  if (!slotsContainer) {
-    console.error("slotsContainer not found");  // DEBUG
-    return;
-  }
-
-  slotsContainer.innerHTML = "";
-
-  user.subSlots.forEach(slot => {
-    const slotCard = document.createElement("div");
-    slotCard.className = `slot-card ${slot.status}`;
-
-    if (slot.status === "empty") {
-      slotCard.innerHTML = "Свободно";
-    } else if (slot.status === "active") {
-      const timeLeft = slot.expires - Date.now();
-      const minutes = Math.floor(timeLeft / 60000);
-      slotCard.innerHTML = `Таймер: ${minutes} мин`;
-    } else if (slot.status === "need_subscribe") {
-      slotCard.innerHTML = "Подпишись";
+  if (!btn) return;
+  setCursor(btn);
+  // initial state already 'active' in HTML (Полная)
+  btn.onclick = () => {
+    const isActive = btn.classList.contains('active'); // active = Полная visible
+    // After click we toggle
+    if (isActive) {
+      // switch to краткая
+      btn.classList.remove('active');
+      btn.textContent = 'Краткая';
+      if (fullStats) fullStats.style.display = 'none';
+      if (collapsedStats) collapsedStats.style.display = 'block';
     } else {
-      slotCard.innerHTML = "Завершено";
+      btn.classList.add('active');
+      btn.textContent = 'Полная';
+      if (fullStats) fullStats.style.display = 'grid';
+      if (collapsedStats) collapsedStats.style.display = 'none';
     }
-
-    slotsContainer.appendChild(slotCard);
-  });
-
-  // Логика таймера (если нужно)
-  const activeSlots = user.subSlots.filter(s => s.status === "active").length;
-  if (activeSlots === user.current_slot_count && !timerInterval) {
-    timerInterval = setInterval(() => {
-      user.progress += user.timer_speed_multiplier * 0.1;  // +0.1% в секунду
-      updateMain();
-      if (user.progress >= 100) {
-        clearInterval(timerInterval);
-        user.balance += user.payout_rate * 10;  // Начисление
-        tg.showAlert("Цикл завершён! +10 ⭐");
-        // POST save
-        fetch(`/api/user/${tg.initDataUnsafe.user.id}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Telegram-WebApp-InitData': tg.initData },
-          body: JSON.stringify({ progress: 0, balance: user.balance })
-        });
-      }
-    }, 1000);
-  } else if (activeSlots < user.current_slot_count) {
-    if (timerInterval) {
-      clearInterval(timerInterval);
-      timerInterval = null;
-    }
-  }
+    updateCollapsedStats();
+  };
+  // set initial visibility
+  if (fullStats) fullStats.style.display = btn.classList.contains('active') ? 'grid' : 'none';
+  if (collapsedStats) collapsedStats.style.display = btn.classList.contains('active') ? 'none' : 'block';
+  updateCollapsedStats();
+}
+function updateCollapsedStats(){
+  safeText('levelMini', user.level ?? 0);
+  safeText('boostMini', user.refPoints ?? 0);
+  safeText('slotsMini', `${(user.subSlots||[]).length}/${user.current_slot_count||5}`);
+  safeText('speedMini', (user.timer_speed_multiplier||1).toFixed(3));
 }
 
-// ===================================
-// [ПРОКАЧКА]
-// ===================================
-function initUpgradePage() {
-  console.log("Init upgrade page");  // DEBUG
-  const boostLevels = document.getElementById("boostLevels");
-  if (!boostLevels) return;
+// MAIN update
+function updateMain(){
+  safeText('level', user.level ?? '--');
+  safeText('freePoints', user.freePoints ?? 0);
+  safeText('refPoints', user.refPoints ?? 0);
+  safeText('payoutBonus', user.payoutBonus ?? 0);
+  const bal = document.getElementById('balance');
+  if (bal) bal.textContent = ((user.balance||0).toFixed ? user.balance.toFixed(1) : user.balance);
+  const prog = document.getElementById('progressPercent');
+  if (prog) prog.textContent = ((user.progress||0).toFixed(1)) + '%';
+  const pf = document.getElementById('progressFill');
+  if (pf) pf.style.width = Math.min(100, user.progress || 0) + '%';
+}
 
-  boostLevels.innerHTML = "";
+// SLOTS
+let timerInterval = null;
 
-  for (let i = 1; i <= 10; i++) {
-    const btn = document.createElement("button");
-    btn.className = `boost-btn ${i <= user.boostLevel ? "active" : ""}`;
-    btn.textContent = `Lv.${i}`;
+function createSlotCard(slot){
+  const slotCard = document.createElement('div');
+  slotCard.className = `slot-card ${slot.status||'empty'}`;
+  slotCard.style.display = 'flex';
+  slotCard.style.justifyContent = 'space-between';
+  slotCard.style.alignItems = 'center';
+  slotCard.style.padding = '12px';
+  // left
+  const left = document.createElement('div');
+  left.style.flex = '1';
+  const title = document.createElement('div');
+  title.style.fontWeight = '700';
+  title.textContent = slot.channel_username || slot.name || (slot.status === 'empty' ? 'Свободно' : 'Слот');
+  left.appendChild(title);
+  if (slot.status === 'active' && slot.expires) {
+    const delta = Math.max(0, slot.expires - Date.now());
+    const min = Math.floor(delta/60000);
+    const sec = Math.floor((delta%60000)/1000);
+    const t = document.createElement('div');
+    t.textContent = `Таймер: ${min}м ${sec}с`;
+    left.appendChild(t);
+  } else if (slot.status === 'empty') {
+    const t = document.createElement('div');
+    t.textContent = 'Свободная ячейка';
+    t.style.fontStyle = 'italic';
+    left.appendChild(t);
+  }
+  slotCard.appendChild(left);
+  // right action
+  const right = document.createElement('div');
+  const btn = document.createElement('button');
+  btn.className = 'btn-neon';
+  btn.style.padding = '6px 10px';
+  btn.style.fontSize = '0.85rem';
+  setCursor(btn);
+  if (slot.status === 'empty'){
+    btn.textContent = 'Занять';
     btn.onclick = () => {
-      if (i > user.boostLevel && user.freePoints >= i * 10) {
-        user.boostLevel = i;
-        user.freePoints -= i * 10;
-        updateMain();
-        initUpgradePage();
-        tg.showAlert(`Буст Lv.${i} активирован!`);
-      } else if (i > user.boostLevel) {
-        tg.showAlert("Недостаточно очков!");
-      }
+      slot.status = 'active';
+      slot.expires = Date.now() + 1000*60*10;
+      renderAdSlots();
+      renderHomeSlotsList();
     };
-    boostLevels.appendChild(btn);
+  } else {
+    btn.textContent = 'Детали';
+    btn.onclick = () => tg.showAlert && tg.showAlert('Слот: ' + (slot.channel_username||'—'));
   }
-
-  const applyBtn = document.getElementById("applyBoost");
-  if (applyBtn) {
-    applyBtn.onclick = () => {
-      if (user.freePoints >= 50) {
-        user.currentBoostLevel += 1;
-        user.freePoints -= 50;
-        updateMain();
-        tg.showAlert("Буст применён!");
-      } else {
-        tg.showAlert("Недостаточно очков!");
-      }
-    };
-  }
+  right.appendChild(btn);
+  slotCard.appendChild(right);
+  return slotCard;
 }
 
-// ===================================
-// [КУПЛЯ СЛОТОВ] (теперь создание слота, free)
-// ===================================
-function initBuyPage() {
-  console.log("Init buy page");  // DEBUG
-  const name = document.getElementById("adName");
-  const link = document.getElementById("adLink");
-  const type = document.getElementById("adType");
-  const shows = document.getElementById("adShows");
-  const totalCalc = document.getElementById("totalCalc");
-  const resetBtn = document.getElementById("resetBtn");
-  const payBtn = document.getElementById("payBtn");
-
-  if (!name || !link || !type || !shows || !totalCalc || !resetBtn || !payBtn) {
-    console.error("Buy page elements not found");  // DEBUG
+function renderAdSlots(){
+  const grid = document.getElementById('adSlotsGrid');
+  if (!grid) {
+    console.warn('adSlotsGrid not found');
     return;
   }
+  grid.innerHTML = '';
+  if (!user.subSlots || user.subSlots.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'slot-card empty';
+    empty.style.justifyContent = 'center';
+    empty.style.fontStyle = 'italic';
+    empty.textContent = 'Нет слотов';
+    grid.appendChild(empty);
+    return;
+  }
+  user.subSlots.forEach(s=>{
+    const el = createSlotCard(s);
+    grid.appendChild(el);
+  });
+  renderHomeSlotsList();
 
-  function updateCalc() {
-    const basePrice = 0;  // Free тест
-    totalCalc.textContent = basePrice;  // 0 ⭐
+  const activeCount = user.subSlots.filter(s=>s.status==='active').length;
+  if (activeCount >= (user.current_slot_count||5) && !timerInterval){
+    timerInterval = setInterval(()=>{
+      user.progress = (user.progress||0) + (user.timer_speed_multiplier||1)*0.1;
+      if (user.progress >= 100){
+        clearInterval(timerInterval);
+        timerInterval = null;
+        user.progress = 0;
+        user.balance = (user.balance||0) + ((user.payout_rate||1) * 10);
+        tg.showAlert && tg.showAlert('Цикл завершён! +10 ⭐');
+        // try save
+        fetch(`/api/user/${tg.initDataUnsafe?.user?.id || 0}`, {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json', 'X-Telegram-WebApp-InitData': tg.initData || '' },
+          body: JSON.stringify({ progress: 0, balance: user.balance })
+        }).catch(()=>{});
+      }
+      updateMain();
+    }, 1000);
+  } else if (activeCount < (user.current_slot_count||5)) {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  }
+}
+
+function renderHomeSlotsList(){
+  const container = document.getElementById('adSlotsContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  if (!user.adSlots || user.adSlots.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'slot-card empty';
+    empty.style.justifyContent = 'center';
+    empty.style.fontStyle = 'italic';
+    empty.textContent = 'Нет купленных слотов';
+    container.appendChild(empty);
+    return;
+  }
+  user.adSlots.forEach(s=>{
+    const el = document.createElement('div');
+    el.className = 'slot-card active';
+    el.textContent = s.channel_username || s.channel_name || 'Слот';
+    container.appendChild(el);
+  });
+}
+
+// UPGRADE: uses .boost-levels class (present in HTML)
+function initUpgradePage(){
+  const container = qs('.boost-levels');
+  if (!container) { console.warn('boost-levels not found'); return; }
+  container.innerHTML = '';
+  for (let i=1;i<=4;i++){
+    const b = document.createElement('button');
+    b.className = 'boost-btn' + (i <= (user.boostLevel||0) ? ' active' : '');
+    b.textContent = `${i} - ${i*25}%`;
+    setCursor(b);
+    b.onclick = ()=>{
+      if (i <= (user.boostLevel||0)){
+        user.boostLevel = i;
+        initUpgradePage(); updateMain();
+        return;
+      }
+      if ((user.refPoints||0) >= i){
+        user.boostLevel = i;
+        user.refPoints -= i;
+        tg.showAlert && tg.showAlert(`Разгон Lv.${i} активирован`);
+        updateMain(); initUpgradePage();
+      } else {
+        tg.showAlert && tg.showAlert('Недостаточно очков рефералов');
+      }
+    };
+    container.appendChild(b);
   }
 
-  resetBtn.onclick = () => {
-    console.log("Reset clicked");  // DEBUG
-    name.value = ""; link.value = ""; type.value = "стандарт"; shows.value = "1000";
-    updateCalc();
-  };
+  const applyBtn = document.getElementById('applyBoost');
+  if (applyBtn) {
+    setCursor(applyBtn);
+    applyBtn.onclick = () => {
+      if ((user.freePoints||0) >= 50) {
+        user.currentBoostLevel = (user.currentBoostLevel||0) + 1;
+        user.freePoints -= 50;
+        tg.showAlert && tg.showAlert('Буст применён!');
+        updateMain();
+      } else tg.showAlert && tg.showAlert('Недостаточно очков!');
+    };
+  }
 
-  [name, link, type, shows].forEach(el => el.addEventListener("input", updateCalc));
+  const buyPayout = document.getElementById('buyPayout');
+  if (buyPayout){
+    setCursor(buyPayout);
+    buyPayout.onclick = ()=>{
+      const cost = parseInt(document.getElementById('payoutCost')?.textContent || '10', 10);
+      if ((user.balance||0) >= cost) {
+        user.balance -= cost;
+        user.currentPayout = (user.currentPayout||10) + 1;
+        tg.showAlert && tg.showAlert('Выплата увеличена!');
+        updateMain();
+      } else tg.showAlert && tg.showAlert('Недостаточно звёзд!');
+    };
+  }
+
+  const invite = document.getElementById('inviteFriendBtn');
+  if (invite) { setCursor(invite); invite.onclick = ()=>{ tg.sendData && tg.sendData('invite'); tg.showAlert && tg.showAlert('Приглашение отправлено'); }; }
+
+  // reset/add level
+  const resetLevelBtn = document.getElementById('resetLevelBtn');
+  if (resetLevelBtn){ setCursor(resetLevelBtn); resetLevelBtn.onclick = ()=>{ user.level = 1; user.freePoints = 0; updateMain(); tg.showAlert && tg.showAlert('Сброшено (тест)'); }; }
+  const addLevelBtn = document.getElementById('addLevelBtn');
+  if (addLevelBtn){ setCursor(addLevelBtn); addLevelBtn.onclick = ()=>{ user.level = (user.level||1)+1; user.freePoints = (user.freePoints||0)+1; updateMain(); tg.showAlert && tg.showAlert('+1 уровень (тест)'); }; }
+}
+
+// BUY page — uses ids present in your HTML (slotName, slotLink, slotType, showsSelect)
+function initBuyPage(){
+  const name = qs('#slotName','#adName');
+  const link = qs('#slotLink','#adLink');
+  const type = qs('#slotType','#adType');
+  const shows = qs('#showsSelect','#adShows');
+  const totalCalc = document.getElementById('totalCalc');
+  const resetBtn = document.getElementById('resetBtn');
+  const payBtn = document.getElementById('payBtn');
+
+  function updateCalc(){
+    if (!totalCalc) return;
+    const base = 0;
+    totalCalc.textContent = base;
+    const calcType = document.getElementById('calcType');
+    if (calcType && type) calcType.textContent = type.value || 'стандарт';
+    const calcShows = document.getElementById('calcShows');
+    if (calcShows && shows) calcShows.textContent = shows.value || '1000';
+  }
+
+  if (resetBtn){
+    setCursor(resetBtn);
+    resetBtn.onclick = () => {
+      if (name) name.value = '';
+      if (link) link.value = '';
+      if (type) type.value = 'стандарт';
+      if (shows) shows.value = '1000';
+      updateCalc();
+    };
+  }
+
+  [name,link,type,shows].forEach(e=>{ if (e && e.addEventListener) e.addEventListener('input', updateCalc); });
   updateCalc();
 
-  payBtn.onclick = () => {
-    console.log("Pay clicked");  // DEBUG
-    if (!name.value.trim() || !link.value.trim()) {
-      alert("Заполните название и ссылку!");
-      return;
-    }
-    const channelUsername = name.value.trim().startsWith('@') ? name.value.trim() : `@${name.value.trim()}`;
-    const requiredShows = parseInt(shows.value) || 1000;
-    if (!confirm(`Создать слот: ${channelUsername}, показов: ${requiredShows}?`)) return;
+  if (payBtn){
+    setCursor(payBtn);
+    payBtn.onclick = async () => {
+      const nm = name ? name.value.trim() : '';
+      const ln = link ? link.value.trim() : '';
+      if (!nm || !ln) { alert('Заполните название и ссылку!'); return; }
+      const channelUsername = nm.startsWith('@') ? nm : '@'+nm;
+      const requiredShows = parseInt((shows && shows.value) || 1000, 10);
+      if (!confirm(`Создать слот: ${channelUsername}, показов: ${requiredShows}?`)) return;
 
-    // ← НОВОЕ: POST /api/slot (free)
-    fetch(`https://mellstar-backend.onrender.com/api/slot`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Telegram-WebApp-InitData': tg.initData },
-      body: JSON.stringify({
-        advertiser_id: tg.initDataUnsafe.user.id,  // Твой ID
-        channel_username: channelUsername,
-        channel_name: link.value.trim(),  // Название
-        link: link.value.trim(),  // Ссылка на пост
-        slot_type: type.value,
-        required_shows: requiredShows
-      })
-    }).then(response => {
-      if (response.ok) {
-        return response.json();
-      } else {
-        throw new Error('Error creating slot');
+      try {
+        const resp = await fetch('https://mellstar-backend.onrender.com/api/slot', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json', 'X-Telegram-WebApp-InitData': tg.initData || '' },
+          body: JSON.stringify({
+            advertiser_id: tg.initDataUnsafe?.user?.id || 0,
+            channel_username: channelUsername,
+            channel_name: nm,
+            link: ln,
+            slot_type: (type && type.value) || 'стандарт',
+            required_shows: requiredShows
+          })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          tg.showAlert && tg.showAlert('Слот создан! ID: ' + (data.slot_id || '—'));
+          // добавим в локальную модель и обновим UI
+          user.adSlots = user.adSlots || [];
+          user.adSlots.push({ channel_username: channelUsername, id: data.slot_id || Date.now() });
+          // так-же добавим в subSlots пустую ячейку, чтобы визуально отображалось
+          user.subSlots = user.subSlots || [];
+          if (user.subSlots.length < (user.current_slot_count||5)) {
+            user.subSlots.push({ id: user.subSlots.length, status: 'empty', expires: null });
+          }
+          resetBtn && resetBtn.click();
+          document.querySelector('[data-page="home"]').click();
+          renderAdSlots();
+          renderHomeSlotsList();
+        } else {
+          const txt = await resp.text().catch(()=>null);
+          console.error('Slot create failed', resp.status, txt);
+          tg.showAlert && tg.showAlert('Ошибка создания слота');
+        }
+      } catch (e) {
+        console.error('Network error create slot', e);
+        tg.showAlert && tg.showAlert('Ошибка сети при создании слота');
       }
-    }).then(data => {
-      tg.showAlert(`Слот создан! ID: ${data.slot_id}`);
-      resetBtn.click();
-      document.querySelector('[data-page="home"]').click();
-      renderAdSlots();  // Обнови слоты
-    }).catch(error => {
-      console.error('Create slot error:', error);
-      tg.showAlert('Ошибка создания слота');
-    });
-  };
+    };
+  }
 }
 
-// ===================================
-// [ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ]
-// ===================================
-document.addEventListener("DOMContentLoaded", async () => {
-  console.log("DOM loaded");  // DEBUG
+// INIT
+document.addEventListener('DOMContentLoaded', async ()=>{
   initStatsToggle();
 
-  // ← НОВОЕ: Создай/загрузи user из backend
   const userId = tg.initDataUnsafe?.user?.id;
-  if (userId) {
+  if (userId){
     try {
-      const response = await fetch(`https://mellstar-backend.onrender.com/api/user/${userId}`, {
+      const r = await fetch(`https://mellstar-backend.onrender.com/api/user/${userId}`, {
         method: 'GET',
-        headers: {
-          'X-Telegram-WebApp-InitData': tg.initData || ''  // Для verify в backend
-        }
+        headers: { 'X-Telegram-WebApp-InitData': tg.initData || '' }
       });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.new_user) {
-          tg.showAlert('Аккаунт создан! Добро пожаловать!');
-        }
-        // Замени моки реальными данными
+      if (r.ok){
+        const data = await r.json();
+        if (data.new_user) tg.showAlert && tg.showAlert('Аккаунт создан! Добро пожаловать!');
         user = {
           level: data.level || 1,
           freePoints: data.free_points || 0,
@@ -307,30 +409,27 @@ document.addEventListener("DOMContentLoaded", async () => {
           progress: data.checkpoint_progress || 0,
           boostLevel: data.current_boost_level || 0,
           adSlots: [],
-          subSlots: Array(data.current_slot_count || 5).fill(null).map((_, i) => ({ id: i, status: "empty", expires: null }))
+          subSlots: Array(data.current_slot_count || 5).fill(null).map((_,i)=>({ id:i, status:'empty', expires:null })),
+          current_slot_count: data.current_slot_count || 5,
+          timer_speed_multiplier: data.timer_speed_multiplier || 1.0,
+          payout_rate: data.payout_rate || 1.0
         };
-        console.log('User from API:', user);  // F12 Console для дебага
       } else {
-        console.error('API error:', response.status);
+        console.warn('API user fetch', r.status);
       }
-    } catch (error) {
-      console.error('Fetch error:', error);
-    }
+    } catch (e) { console.warn('fetch user fail', e); }
   }
 
   updateMain();
   renderAdSlots();
   initUpgradePage();
+  renderHomeSlotsList();
 
-  // ← ФИКС: Добавь onclick для кнопок после DOM (если fetch задерживается)
-  const infoBtn = document.getElementById("infoBtn");
-  if (infoBtn) infoBtn.onclick = () => {
-    alert("Подпишись на все каналы → таймер запустится → зарабатывай звёзды!");
-  };
+  const infoBtn = document.getElementById('infoBtn');
+  if (infoBtn){ setCursor(infoBtn); infoBtn.onclick = ()=> alert('Подпишись на все каналы → таймер запустится → зарабатывай звёзды!'); }
 
-  const buySlotBtn = document.querySelector(".buy-slot");
-  if (buySlotBtn) buySlotBtn.onclick = () => {
-    const buyPageBtn = document.querySelector('[data-page="buy"]');
-    if (buyPageBtn) buyPageBtn.click();
-  };
+  const buySlotBtn = document.querySelector('.buy-slot');
+  if (buySlotBtn){ setCursor(buySlotBtn); buySlotBtn.onclick = ()=> { const buyPageBtn = document.querySelector('[data-page="buy"]'); if (buyPageBtn) buyPageBtn.click(); }; }
+
+  initBuyPage();
 });
