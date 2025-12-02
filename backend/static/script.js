@@ -32,6 +32,7 @@ const payoutCosts = [10,11,13,17,24,36,58,98,127,166,215,280,364,473,615,677,744
 // ===================================
 document.querySelectorAll(".nav-item").forEach(btn => {
   btn.onclick = () => {
+    console.log("Nav clicked:", btn.dataset.page);  // DEBUG: Клик сработал?
     document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
@@ -99,8 +100,12 @@ function updateMain() {
 let timerInterval = null;  // Для таймера
 
 function renderAdSlots() {
+  console.log("Rendering slots:", user.subSlots.length);  // DEBUG: Вызвано?
   const slotsContainer = document.getElementById("slotsContainer");
-  if (!slotsContainer) return;
+  if (!slotsContainer) {
+    console.error("slotsContainer not found");  // DEBUG
+    return;
+  }
 
   slotsContainer.innerHTML = "";
 
@@ -153,6 +158,7 @@ function renderAdSlots() {
 // [ПРОКАЧКА]
 // ===================================
 function initUpgradePage() {
+  console.log("Init upgrade page");  // DEBUG
   const boostLevels = document.getElementById("boostLevels");
   if (!boostLevels) return;
 
@@ -195,6 +201,7 @@ function initUpgradePage() {
 // [КУПЛЯ СЛОТОВ] (теперь создание слота, free)
 // ===================================
 function initBuyPage() {
+  console.log("Init buy page");  // DEBUG
   const name = document.getElementById("adName");
   const link = document.getElementById("adLink");
   const type = document.getElementById("adType");
@@ -203,7 +210,10 @@ function initBuyPage() {
   const resetBtn = document.getElementById("resetBtn");
   const payBtn = document.getElementById("payBtn");
 
-  if (!name || !link || !type || !shows || !totalCalc || !resetBtn || !payBtn) return;
+  if (!name || !link || !type || !shows || !totalCalc || !resetBtn || !payBtn) {
+    console.error("Buy page elements not found");  // DEBUG
+    return;
+  }
 
   function updateCalc() {
     const basePrice = 0;  // Free тест
@@ -211,6 +221,7 @@ function initBuyPage() {
   }
 
   resetBtn.onclick = () => {
+    console.log("Reset clicked");  // DEBUG
     name.value = ""; link.value = ""; type.value = "стандарт"; shows.value = "1000";
     updateCalc();
   };
@@ -219,6 +230,7 @@ function initBuyPage() {
   updateCalc();
 
   payBtn.onclick = () => {
+    console.log("Pay clicked");  // DEBUG
     if (!name.value.trim() || !link.value.trim()) {
       alert("Заполните название и ссылку!");
       return;
@@ -261,6 +273,7 @@ function initBuyPage() {
 // [ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ]
 // ===================================
 document.addEventListener("DOMContentLoaded", async () => {
+  console.log("DOM loaded");  // DEBUG
   initStatsToggle();
 
   // ← НОВОЕ: Создай/загрузи user из backend
