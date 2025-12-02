@@ -1,5 +1,6 @@
-﻿// ===================================
-// script.js — исправленная версия (замена целиком)
+﻿// static/script.js
+// ===================================
+// script.js — ваша версия, расширенная для работы с бэкендом
 // ===================================
 
 const tg = window.Telegram?.WebApp || { initDataUnsafe: {}, initData: '', showAlert: (m)=>alert(m) };
@@ -22,7 +23,8 @@ let user = {
   subSlots: Array(5).fill(null).map((_, i) => ({ id: i, status: "empty", expires: null })),
   current_slot_count: 5,
   timer_speed_multiplier: 1.0,
-  payout_rate: 1.0
+  payout_rate: 1.0,
+  timer_running: false
 };
 
 function qs(...selectors) {
@@ -63,19 +65,16 @@ document.querySelectorAll(".nav-item").forEach(btn => {
   };
 });
 
-// STATS toggle: uses .stats-grid as "full"
+// STATS toggle
 function initStatsToggle(){
   const btn = document.getElementById("statsToggleBtn");
   const fullStats = qs('.stats-grid', '#fullStats', '#statsContainer');
   const collapsedStats = document.getElementById("collapsedStats");
   if (!btn) return;
   setCursor(btn);
-  // initial state already 'active' in HTML (Полная)
   btn.onclick = () => {
-    const isActive = btn.classList.contains('active'); // active = Полная visible
-    // After click we toggle
+    const isActive = btn.classList.contains('active');
     if (isActive) {
-      // switch to краткая
       btn.classList.remove('active');
       btn.textContent = 'Краткая';
       if (fullStats) fullStats.style.display = 'none';
@@ -88,7 +87,6 @@ function initStatsToggle(){
     }
     updateCollapsedStats();
   };
-  // set initial visibility
   if (fullStats) fullStats.style.display = btn.classList.contains('active') ? 'grid' : 'none';
   if (collapsedStats) collapsedStats.style.display = btn.classList.contains('active') ? 'none' : 'block';
   updateCollapsedStats();
@@ -110,13 +108,10 @@ function updateMain(){
   if (bal) bal.textContent = ((user.balance||0).toFixed ? user.balance.toFixed(1) : user.balance);
   const prog = document.getElementById('progressPercent');
   if (prog) prog.textContent = ((user.progress||0).toFixed(1)) + '%';
-  const pf = document.getElementById('progressFill');
-  if (pf) pf.style.width = Math.min(100, user.progress || 0) + '%';
+  updateTimerProgress();
 }
 
-// SLOTS
-let timerInterval = null;
-
+// SLOTS helpers (createSlotCard kept for local UI consistency)
 function createSlotCard(slot){
   const slotCard = document.createElement('div');
   slotCard.className = `slot-card ${slot.status||'empty'}`;
@@ -124,95 +119,24 @@ function createSlotCard(slot){
   slotCard.style.justifyContent = 'space-between';
   slotCard.style.alignItems = 'center';
   slotCard.style.padding = '12px';
-  // left
   const left = document.createElement('div');
   left.style.flex = '1';
   const title = document.createElement('div');
   title.style.fontWeight = '700';
   title.textContent = slot.channel_username || slot.name || (slot.status === 'empty' ? 'Свободно' : 'Слот');
   left.appendChild(title);
-  if (slot.status === 'active' && slot.expires) {
-    const delta = Math.max(0, slot.expires - Date.now());
-    const min = Math.floor(delta/60000);
-    const sec = Math.floor((delta%60000)/1000);
-    const t = document.createElement('div');
-    t.textContent = `Таймер: ${min}м ${sec}с`;
-    left.appendChild(t);
-  } else if (slot.status === 'empty') {
-    const t = document.createElement('div');
-    t.textContent = 'Свободная ячейка';
-    t.style.fontStyle = 'italic';
-    left.appendChild(t);
-  }
   slotCard.appendChild(left);
-  // right action
   const right = document.createElement('div');
   const btn = document.createElement('button');
   btn.className = 'btn-neon';
   btn.style.padding = '6px 10px';
   btn.style.fontSize = '0.85rem';
   setCursor(btn);
-  if (slot.status === 'empty'){
-    btn.textContent = 'Занять';
-    btn.onclick = () => {
-      slot.status = 'active';
-      slot.expires = Date.now() + 1000*60*10;
-      renderAdSlots();
-      renderHomeSlotsList();
-    };
-  } else {
-    btn.textContent = 'Детали';
-    btn.onclick = () => tg.showAlert && tg.showAlert('Слот: ' + (slot.channel_username||'—'));
-  }
+  btn.textContent = 'Детали';
+  btn.onclick = () => tg.showAlert && tg.showAlert('Слот: ' + (slot.channel_username||'—'));
   right.appendChild(btn);
   slotCard.appendChild(right);
   return slotCard;
-}
-
-function renderAdSlots(){
-  const grid = document.getElementById('adSlotsGrid');
-  if (!grid) {
-    console.warn('adSlotsGrid not found');
-    return;
-  }
-  grid.innerHTML = '';
-  if (!user.subSlots || user.subSlots.length === 0){
-    const empty = document.createElement('div');
-    empty.className = 'slot-card empty';
-    empty.style.justifyContent = 'center';
-    empty.style.fontStyle = 'italic';
-    empty.textContent = 'Нет слотов';
-    grid.appendChild(empty);
-    return;
-  }
-  user.subSlots.forEach(s=>{
-    const el = createSlotCard(s);
-    grid.appendChild(el);
-  });
-  renderHomeSlotsList();
-
-  const activeCount = user.subSlots.filter(s=>s.status==='active').length;
-  if (activeCount >= (user.current_slot_count||5) && !timerInterval){
-    timerInterval = setInterval(()=>{
-      user.progress = (user.progress||0) + (user.timer_speed_multiplier||1)*0.1;
-      if (user.progress >= 100){
-        clearInterval(timerInterval);
-        timerInterval = null;
-        user.progress = 0;
-        user.balance = (user.balance||0) + ((user.payout_rate||1) * 10);
-        tg.showAlert && tg.showAlert('Цикл завершён! +10 ⭐');
-        // try save
-        fetch(`/api/user/${tg.initDataUnsafe?.user?.id || 0}`, {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json', 'X-Telegram-WebApp-InitData': tg.initData || '' },
-          body: JSON.stringify({ progress: 0, balance: user.balance })
-        }).catch(()=>{});
-      }
-      updateMain();
-    }, 1000);
-  } else if (activeCount < (user.current_slot_count||5)) {
-    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-  }
 }
 
 function renderHomeSlotsList(){
@@ -236,7 +160,7 @@ function renderHomeSlotsList(){
   });
 }
 
-// UPGRADE: uses .boost-levels class (present in HTML)
+// UPGRADE handlers (unchanged)
 function initUpgradePage(){
   const container = qs('.boost-levels');
   if (!container) { console.warn('boost-levels not found'); return; }
@@ -246,7 +170,7 @@ function initUpgradePage(){
     b.className = 'boost-btn' + (i <= (user.boostLevel||0) ? ' active' : '');
     b.textContent = `${i} - ${i*25}%`;
     setCursor(b);
-    b.onclick = ()=>{
+    b.onclick = ()=>{ /* same logic */ 
       if (i <= (user.boostLevel||0)){
         user.boostLevel = i;
         initUpgradePage(); updateMain();
@@ -280,7 +204,7 @@ function initUpgradePage(){
   const buyPayout = document.getElementById('buyPayout');
   if (buyPayout){
     setCursor(buyPayout);
-    buyPayout.onclick = ()=>{
+    buyPayout.onclick = ()=>{ /* as before */ 
       const cost = parseInt(document.getElementById('payoutCost')?.textContent || '10', 10);
       if ((user.balance||0) >= cost) {
         user.balance -= cost;
@@ -294,14 +218,13 @@ function initUpgradePage(){
   const invite = document.getElementById('inviteFriendBtn');
   if (invite) { setCursor(invite); invite.onclick = ()=>{ tg.sendData && tg.sendData('invite'); tg.showAlert && tg.showAlert('Приглашение отправлено'); }; }
 
-  // reset/add level
   const resetLevelBtn = document.getElementById('resetLevelBtn');
   if (resetLevelBtn){ setCursor(resetLevelBtn); resetLevelBtn.onclick = ()=>{ user.level = 1; user.freePoints = 0; updateMain(); tg.showAlert && tg.showAlert('Сброшено (тест)'); }; }
   const addLevelBtn = document.getElementById('addLevelBtn');
   if (addLevelBtn){ setCursor(addLevelBtn); addLevelBtn.onclick = ()=>{ user.level = (user.level||1)+1; user.freePoints = (user.freePoints||0)+1; updateMain(); tg.showAlert && tg.showAlert('+1 уровень (тест)'); }; }
 }
 
-// BUY page — uses ids present in your HTML (slotName, slotLink, slotType, showsSelect)
+// BUY page
 function initBuyPage(){
   const name = qs('#slotName','#adName');
   const link = qs('#slotLink','#adLink');
@@ -326,7 +249,7 @@ function initBuyPage(){
     resetBtn.onclick = () => {
       if (name) name.value = '';
       if (link) link.value = '';
-      if (type) type.value = 'стандарт';
+      if (type) type.value = 'standard';
       if (shows) shows.value = '1000';
       updateCalc();
     };
@@ -346,7 +269,7 @@ function initBuyPage(){
       if (!confirm(`Создать слот: ${channelUsername}, показов: ${requiredShows}?`)) return;
 
       try {
-        const resp = await fetch('https://mellstar-backend.onrender.com/api/slot', {
+        const resp = await fetch('/api/slot', {
           method: 'POST',
           headers: { 'Content-Type':'application/json', 'X-Telegram-WebApp-InitData': tg.initData || '' },
           body: JSON.stringify({
@@ -354,17 +277,15 @@ function initBuyPage(){
             channel_username: channelUsername,
             channel_name: nm,
             link: ln,
-            slot_type: (type && type.value) || 'стандарт',
+            slot_type: (type && type.value) || 'standard',
             required_shows: requiredShows
           })
         });
         if (resp.ok) {
           const data = await resp.json();
           tg.showAlert && tg.showAlert('Слот создан! ID: ' + (data.slot_id || '—'));
-          // добавим в локальную модель и обновим UI
           user.adSlots = user.adSlots || [];
           user.adSlots.push({ channel_username: channelUsername, id: data.slot_id || Date.now() });
-          // так-же добавим в subSlots пустую ячейку, чтобы визуально отображалось
           user.subSlots = user.subSlots || [];
           if (user.subSlots.length < (user.current_slot_count||5)) {
             user.subSlots.push({ id: user.subSlots.length, status: 'empty', expires: null });
@@ -386,6 +307,155 @@ function initBuyPage(){
   }
 }
 
+// ==================== API integration ====================
+async function fetchUserSlots() {
+    const userId = tg.initDataUnsafe?.user?.id;
+    if (!userId) return [];
+    try {
+        const res = await fetch(`/api/user_slots/${userId}`, {
+          headers: { 'X-Telegram-WebApp-InitData': tg.initData || '' }
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.map(s => ({
+            slot_id: s.slot_id,
+            channel_username: s.title,
+            link: s.link,
+            type: s.type,
+            status: s.status,
+            expires: null
+        }));
+    } catch (e) {
+        console.warn('fetchUserSlots error', e);
+        return [];
+    }
+}
+async function subscribeSlot(slot_id) {
+    const userId = tg.initDataUnsafe?.user?.id;
+    if (!userId) return;
+    try {
+        const res = await fetch(`/api/subscribe_slot`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Telegram-WebApp-InitData': tg.initData || '' },
+            body: JSON.stringify({ user_id: userId, slot_id })
+        });
+        if (!res.ok) {
+            console.warn('subscribe failed', res.status);
+            return;
+        }
+        const data = await res.json();
+        user.timer_running = data.timer_running;
+        updateTimerProgress();
+        await loadSlots(); // обновляем список после подписки
+    } catch(e) {
+        console.warn('subscribeSlot error', e);
+    }
+}
+async function loadSlots() {
+    user.subSlots = await fetchUserSlots();
+    renderAdSlots();
+    renderHomeSlotsList();
+}
+
+// poll user progress/timer state from backend
+async function fetchUserProgress() {
+    const userId = tg.initDataUnsafe?.user?.id;
+    if (!userId) return null;
+    try {
+        const res = await fetch(`/api/user_progress/${userId}`);
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (e) {
+        return null;
+    }
+}
+
+function updateTimerProgress() {
+    const bar = document.getElementById('progressFill');
+    if (!bar) return;
+    bar.style.width = Math.min(100, user.progress || 0) + '%';
+    bar.style.backgroundColor = user.timer_running ? 'green' : 'red';
+    const prog = document.getElementById('progressPercent');
+    if (prog) prog.textContent = ((user.progress||0).toFixed(1)) + '%';
+}
+
+// renderAdSlots adapted to server-driven slots
+function renderAdSlots(){
+  const grid = document.getElementById('adSlotsGrid');
+  if (!grid) {
+    console.warn('adSlotsGrid not found');
+    return;
+  }
+  grid.innerHTML = '';
+  if (!user.subSlots || user.subSlots.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'slot-card empty';
+    empty.style.justifyContent = 'center';
+    empty.style.fontStyle = 'italic';
+    empty.textContent = 'Нет слотов';
+    grid.appendChild(empty);
+    return;
+  }
+  user.subSlots.forEach(s=>{
+    const el = document.createElement('div');
+    el.className = `slot-card ${s.status||'empty'}`;
+    el.style.display = 'flex';
+    el.style.justifyContent = 'space-between';
+    el.style.alignItems = 'center';
+    el.style.padding = '10px';
+    el.innerHTML = `
+        <span>${s.channel_username} (${s.type})</span>
+        <a href="${s.link}" target="_blank">Перейти</a>
+        <button ${s.status === 'subscribed' || s.status === 'completed' ? 'disabled' : ''} data-id="${s.slot_id}">
+            ${s.status === 'subscribed' || s.status === 'completed' ? 'Подписано' : 'Подписаться'}
+        </button>
+    `;
+    const btn = el.querySelector('button');
+    if (btn && !btn.disabled) {
+      setCursor(btn);
+      btn.onclick = () => subscribeSlot(s.slot_id);
+    }
+    grid.appendChild(el);
+  });
+  renderHomeSlotsList();
+
+  // Timer auto-start logic: if all slots are subscribed -> start timer
+  const activeCount = user.subSlots.filter(s => s.status === 'subscribed').length;
+  if (activeCount === user.subSlots.length && user.subSlots.length > 0) {
+      if (!timerInterval) startTimer();
+  } else {
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+      user.timer_running = false;
+      updateTimerProgress();
+  }
+}
+
+// ==================== Timer (local) ====================
+let timerInterval = null;
+function startTimer() {
+    if (timerInterval) return;
+    user.timer_running = true;
+    updateTimerProgress();
+    timerInterval = setInterval(() => {
+        user.progress = (user.progress || 0) + (user.timer_speed_multiplier || 1) * 0.1;
+        if (user.progress >= 100) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            user.progress = 0;
+            user.balance = (user.balance || 0) + ((user.payout_rate || 1) * 10);
+            tg.showAlert && tg.showAlert('Цикл завершён! +10 ⭐');
+            // Persist progress=0 and balance to backend
+            const userId = tg.initDataUnsafe?.user?.id || 0;
+            fetch(`/api/user/${userId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Telegram-WebApp-InitData': tg.initData || '' },
+                body: JSON.stringify({ checkpoint_progress: 0, timer_progress: 0, balance: user.balance })
+            }).catch(()=>{});
+        }
+        updateTimerProgress();
+    }, 1000);
+}
+
 // INIT
 document.addEventListener('DOMContentLoaded', async ()=>{
   initStatsToggle();
@@ -393,7 +463,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   const userId = tg.initDataUnsafe?.user?.id;
   if (userId){
     try {
-      const r = await fetch(`https://mellstar-backend.onrender.com/api/user/${userId}`, {
+      const r = await fetch(`/api/user/${userId}`, {
         method: 'GET',
         headers: { 'X-Telegram-WebApp-InitData': tg.initData || '' }
       });
@@ -406,13 +476,14 @@ document.addEventListener('DOMContentLoaded', async ()=>{
           refPoints: data.ref_points || 0,
           payoutBonus: data.payout_bonus || 0,
           balance: data.balance || 0.0,
-          progress: data.checkpoint_progress || 0,
+          progress: data.timer_progress || data.checkpoint_progress || 0,
           boostLevel: data.current_boost_level || 0,
           adSlots: [],
           subSlots: Array(data.current_slot_count || 5).fill(null).map((_,i)=>({ id:i, status:'empty', expires:null })),
           current_slot_count: data.current_slot_count || 5,
           timer_speed_multiplier: data.timer_speed_multiplier || 1.0,
-          payout_rate: data.payout_rate || 1.0
+          payout_rate: data.payout_rate || 1.0,
+          timer_running: data.timer_running || false
         };
       } else {
         console.warn('API user fetch', r.status);
@@ -420,10 +491,9 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     } catch (e) { console.warn('fetch user fail', e); }
   }
 
+  await loadSlots();
   updateMain();
-  renderAdSlots();
   initUpgradePage();
-  renderHomeSlotsList();
 
   const infoBtn = document.getElementById('infoBtn');
   if (infoBtn){ setCursor(infoBtn); infoBtn.onclick = ()=> alert('Подпишись на все каналы → таймер запустится → зарабатывай звёзды!'); }
@@ -432,4 +502,19 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if (buySlotBtn){ setCursor(buySlotBtn); buySlotBtn.onclick = ()=> { const buyPageBtn = document.querySelector('[data-page="buy"]'); if (buyPageBtn) buyPageBtn.click(); }; }
 
   initBuyPage();
+
+  // Polling: refresh slots + progress every 3s
+  setInterval(async () => {
+    await loadSlots();
+    const prog = await fetchUserProgress();
+    if (prog) {
+      // only overwrite local progress if backend has a believable value
+      if (typeof prog.timer_progress === 'number') user.progress = prog.timer_progress;
+      if (typeof prog.timer_running === 'boolean') user.timer_running = prog.timer_running;
+      // if backend reports running true and timer not started locally -> start local timer
+      if (user.timer_running && !timerInterval) startTimer();
+      if (!user.timer_running && timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+      updateTimerProgress();
+    }
+  }, 3000);
 });

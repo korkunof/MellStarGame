@@ -2,10 +2,13 @@
 import os
 import json
 import logging
-import urllib.parse  # Для unquote initData
+import urllib.parse
 from contextlib import asynccontextmanager
+import asyncio
+from random import shuffle
+from datetime import datetime
 
-from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi import FastAPI, Request, Depends, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -22,32 +25,28 @@ from database import engine, AsyncSessionLocal
 from models import User, Base, PurchasedAdSlot, UserSlot
 from auth import verify_telegram_initdata
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, exists
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ======================
-# Конфиг
+# Config
 # ======================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-logger.info(f"BOT_TOKEN loaded, len={len(BOT_TOKEN) if BOT_TOKEN else 0}")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "")
 
-# Telegram бот
 application = None
 if BOT_TOKEN:
-    logger.info("Creating application...")
     application = Application.builder().token(BOT_TOKEN).build()
 
 async def start(update: Update, context: CallbackContext):
-    logger.info("Start command called")
     web_url = FRONTEND_URL or f"{WEBHOOK_URL.rsplit('/', 1)[0]}/"
     keyboard = [[InlineKeyboardButton("Играть", web_app=WebAppInfo(url=web_url))]]
     await update.message.reply_text(
-        "Привет! Это <b>MellStarGame</b>\nНажми «Играть» и начни зарабатывать звёзды!",
+        "Привет! Это <b>MellStarGame</b>\nНажми «Играть»!",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode=ParseMode.HTML
     )
@@ -60,21 +59,17 @@ if application:
 # ======================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Lifespan startup: checking bot...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    logger.info("Tables created if not exist")
+
     if application and WEBHOOK_URL:
-        logger.info(f"Initializing application and deleting old webhook...")
         await application.initialize()
         await application.bot.delete_webhook(drop_pending_updates=True)
         await application.bot.set_webhook(url=WEBHOOK_URL)
-        webhook_info = await application.bot.get_webhook_info()
-        logger.info(f"Webhook info: url={webhook_info.url}, pending_updates={webhook_info.pending_update_count}")
-        logger.info(f"Webhook установлен: {WEBHOOK_URL}")
+
     yield
+
     if application:
-        logger.info("Lifespan shutdown: stopping application")
         await application.shutdown()
 
 app = FastAPI(lifespan=lifespan)
@@ -90,47 +85,32 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ======================
-# DB Dependency
+# DB session
 # ======================
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
 
 # ======================
-# Webhook Endpoint для Telegram
+# Telegram Webhook
 # ======================
 @app.post("/webhook")
 async def webhook(request: Request):
-    logger.info("Webhook POST received")
     update_json = await request.json()
-    logger.info(f"Webhook JSON keys: {list(update_json.keys())}")
     update = Update.de_json(update_json, application.bot)
     if update:
         await application.process_update(update)
-        logger.info(f"Processed update: {update.update_id if update.update_id else 'no id'}")
     return {"status": "ok"}
 
 # ======================
-# Test endpoint for /start (для дебага)
-# ======================
-@app.get("/test-start")
-async def test_start():
-    logger.info("Test /start called (manual)")
-    if application:
-        logger.info("Application exists, simulating start")
-        return {"status": "ok", "message": "Start simulation OK, check logs for handler"}
-    return {"status": "error", "message": "No application"}
-
-# ======================
-# API Endpoints
+# API: get user
 # ======================
 @app.get("/api/user/{user_id}")
 async def get_user(user_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-WebApp-InitData", "")
-    logger.info(f"API GET /user/{user_id}: init_data len={len(init_data) if init_data else 0}")
     if init_data and not verify_telegram_initdata(init_data, BOT_TOKEN):
         raise HTTPException(status_code=403, detail="Auth failed")
-    logger.info(f"API GET /user/{user_id}: load/create")
+
     result = await db.get(User, user_id)
     if not result:
         result = User(
@@ -147,52 +127,44 @@ async def get_user(user_id: int, request: Request, db: AsyncSession = Depends(ge
         )
         db.add(result)
         await db.commit()
-        logger.info(f"Created new user via API: {user_id}")
-        return {
-            "new_user": True,
-            "level": result.level,
-            "free_points": result.free_points,
-            "distributed_points": result.distributed_points,
-            "ref_points": result.ref_points,
-            "payout_bonus": result.payout_bonus,
-            "balance": result.balance,
-            "current_slot_count": result.current_slot_count,
-            "timer_speed_multiplier": result.timer_speed_multiplier,
-            "payout_rate": result.payout_rate,
-            "current_boost_level": result.current_boost_level,
-            "current_checkpoint": result.current_checkpoint,
-            "checkpoint_progress": result.checkpoint_progress
-        }
-    else:
-        logger.info(f"Existing user via API: {user_id}")
-        return {
-            "level": result.level,
-            "free_points": result.free_points,
-            "distributed_points": result.distributed_points,
-            "ref_points": result.ref_points,
-            "payout_bonus": result.payout_bonus,
-            "balance": result.balance,
-            "current_slot_count": result.current_slot_count,
-            "timer_speed_multiplier": result.timer_speed_multiplier,
-            "payout_rate": result.payout_rate,
-            "current_boost_level": result.current_boost_level,
-            "current_checkpoint": result.current_checkpoint,
-            "checkpoint_progress": result.checkpoint_progress
-        }
+        await db.refresh(result)
 
+    return {
+        "level": result.level,
+        "free_points": result.free_points,
+        "distributed_points": result.distributed_points,
+        "ref_points": result.ref_points,
+        "payout_bonus": result.payout_bonus,
+        "balance": result.balance,
+        "current_slot_count": result.current_slot_count,
+        "timer_speed_multiplier": result.timer_speed_multiplier,
+        "payout_rate": result.payout_rate,
+        "current_boost_level": result.current_boost_level,
+        "current_checkpoint": result.current_checkpoint,
+        "checkpoint_progress": result.checkpoint_progress,
+        # include timer fields to allow frontend sync
+        "timer_progress": result.timer_progress,
+        "timer_running": result.timer_running,
+    }
+
+# ======================
+# API: save user
+# ======================
 @app.post("/api/user/{user_id}")
 async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     payload = await request.json()
-    logger.info(f"API POST /user/{user_id}: save {list(payload.keys())}")
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     allowed = {
         "level", "free_points", "distributed_points", "payout_bonus", "balance",
         "ref_points", "current_boost_level", "timer_started_at",
-        "current_checkpoint", "checkpoint_progress", "current_slot_count", "timer_speed_multiplier", "payout_rate"
+        "current_checkpoint", "checkpoint_progress",
+        "current_slot_count", "timer_speed_multiplier", "payout_rate",
+        "timer_progress", "timer_running"
     }
+
     for key, value in payload.items():
         if key in allowed and hasattr(user, key):
             setattr(user, key, value)
@@ -201,14 +173,157 @@ async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(g
     return {"status": "saved"}
 
 # ======================
-# API для создания слота (любой пользователь)
+# API: get personal slots for user (assign if less than current_slot_count)
+# ======================
+@app.get("/api/user_slots/{user_id}")
+async def get_user_slots(user_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-WebApp-InitData", "")
+    if init_data and not verify_telegram_initdata(init_data, BOT_TOKEN):
+        raise HTTPException(status_code=403, detail="Auth failed")
+
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    current_us_res = await db.execute(
+        select(UserSlot).where(
+            UserSlot.user_id == user_id,
+            UserSlot.status.in_(["active", "subscribed"])
+        )
+    )
+    current_user_slots = current_us_res.scalars().all()
+    count_current = len(current_user_slots)
+
+    # assign more if needed
+    if count_current < user.current_slot_count:
+        subq = exists().where(
+            UserSlot.slot_id == PurchasedAdSlot.id,
+            UserSlot.user_id == user_id
+        )
+        available_res = await db.execute(
+            select(PurchasedAdSlot).where(
+                PurchasedAdSlot.status == "active",
+                ~subq
+            )
+        )
+        available_slots = available_res.scalars().all()
+
+        vip = [s for s in available_slots if s.slot_type == "vip"]
+        std = [s for s in available_slots if s.slot_type != "vip"]
+        shuffle(vip)
+        shuffle(std)
+        to_assign = (vip + std)[: (user.current_slot_count - count_current) ]
+
+        for s in to_assign:
+            db.add(UserSlot(user_id=user_id, slot_id=s.id, status="active"))
+        await db.commit()
+
+        current_us_res = await db.execute(
+            select(UserSlot).where(
+                UserSlot.user_id == user_id,
+                UserSlot.status.in_(["active", "subscribed"])
+            )
+        )
+        current_user_slots = current_us_res.scalars().all()
+
+    # timer_running computed (true only when no 'active' slots)
+    has_pending = any(us.status == "active" for us in current_user_slots)
+    if user.timer_running != (not has_pending):
+        user.timer_running = not has_pending
+        await db.commit()
+
+    # build response
+    result = []
+    for us in current_user_slots:
+        slot = await db.get(PurchasedAdSlot, us.slot_id)
+        if slot:
+            result.append({
+                "slot_id": slot.id,
+                "title": slot.channel_name,
+                "link": slot.link,
+                "type": slot.slot_type,
+                "status": us.status
+            })
+
+    vip_res = [r for r in result if r["type"] == "vip"]
+    std_res = [r for r in result if r["type"] != "vip"]
+    shuffle(vip_res)
+    shuffle(std_res)
+    return vip_res + std_res
+
+# ======================
+# Subscribe slot
+# ======================
+@app.post("/api/subscribe_slot")
+async def subscribe_slot(request: Request, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    payload = await request.json()
+    user_id = payload.get("user_id")
+    slot_id = payload.get("slot_id")
+
+    init_data = request.headers.get("X-Telegram-WebApp-InitData", "")
+    if init_data and not verify_telegram_initdata(init_data, BOT_TOKEN):
+        raise HTTPException(status_code=403, detail="Auth failed")
+
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    us_res = await db.execute(select(UserSlot).where(UserSlot.user_id == user_id, UserSlot.slot_id == slot_id))
+    user_slot = us_res.scalar()
+    if not user_slot:
+        raise HTTPException(status_code=404, detail="UserSlot not found")
+
+    if user_slot.status != "active":
+        return {"status": "already processed", "timer_running": user.timer_running}
+
+    user_slot.status = "subscribed"
+    user_slot.subscribed_at = datetime.utcnow()
+    await db.commit()
+
+    # schedule close task for this slot (per-user)
+    background_tasks.add_task(close_slot_task, user_id, slot_id)
+
+    # recompute timer_running
+    cur_res = await db.execute(
+        select(UserSlot).where(
+            UserSlot.user_id == user_id,
+            UserSlot.status.in_(["active", "subscribed"])
+        )
+    )
+    cur_slots = cur_res.scalars().all()
+    user.timer_running = not any(us.status == "active" for us in cur_slots)
+    await db.commit()
+
+    return {"status": "subscribed", "timer_running": user.timer_running}
+
+# background task to close a subscribed slot after 60s (test)
+async def close_slot_task(user_id: int, slot_id: int):
+    await asyncio.sleep(60)
+    async with AsyncSessionLocal() as db:
+        us_res = await db.execute(select(UserSlot).where(UserSlot.user_id == user_id, UserSlot.slot_id == slot_id))
+        user_slot = us_res.scalar()
+        if user_slot and user_slot.status == "subscribed":
+            user_slot.status = "completed"
+            await db.commit()
+            # after completion, next get_user_slots will assign a new slot for user if there are available ones
+
+# ======================
+# get user progress (for polling)
+# ======================
+@app.get("/api/user_progress/{user_id}")
+async def get_user_progress(user_id: int, db: AsyncSession = Depends(get_db)):
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"timer_progress": user.timer_progress, "timer_running": user.timer_running}
+
+# ======================
+# Create slot (no auth)
 # ======================
 @app.post("/api/slot")
 async def create_slot(request: Request, db: AsyncSession = Depends(get_db)):
     payload = await request.json()
-    logger.info(f"API POST /slot: {payload}")
 
-    # Создаём слот без проверки advertiser_id
     new_slot = PurchasedAdSlot(
         advertiser_id=payload.get("advertiser_id", 0),
         channel_username=payload.get("channel_username", "unknown"),
@@ -216,85 +331,53 @@ async def create_slot(request: Request, db: AsyncSession = Depends(get_db)):
         link=payload.get("link", ""),
         slot_type=payload.get("slot_type", "standard"),
         required_shows=payload.get("required_shows", 1000),
-        price_paid=0
+        price_paid=0,
+        status="active"
     )
+
     db.add(new_slot)
-    await db.flush()
-    slot_id = new_slot.id
-
-    users = await db.execute(select(User))
-    user_list = list(users.scalars())
-    for u in user_list:
-        user_slot = UserSlot(
-            user_id=u.id,
-            slot_id=slot_id,
-            status="active"
-        )
-        db.add(user_slot)
     await db.commit()
+    await db.refresh(new_slot)
 
-    logger.info(f"Created slot ID {slot_id}, linked to {len(user_list)} users")
-    return {"status": "created", "slot_id": slot_id}
+    return {"status": "created", "slot_id": new_slot.id}
 
 # ======================
-# Главная + автосоздание при открытии WebApp
+# Root
 # ======================
 @app.get("/")
 async def root(request: Request, db: AsyncSession = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-WebApp-InitData", "")
-    logger.info(f"Root GET: init_data len={len(init_data) if init_data else 0}, user-agent={request.headers.get('user-agent', 'unknown')}")
 
-    created = False
     user_id = None
-    if init_data:
-        if verify_telegram_initdata(init_data, BOT_TOKEN):
-            logger.info("Root: initData auth OK, parsing...")
-            try:
-                for part in init_data.split("&"):
-                    if part.startswith("user="):
-                        encoded_user = part[5:]
-                        user_str = urllib.parse.unquote(encoded_user)
-                        user_info = json.loads(user_str)
-                        user_id = user_info.get("id")
-                        if user_id:
-                            logger.info(f"Root: parsed user_id={user_id}, first_name={user_info.get('first_name')}, username={user_info.get('username')}")
-                            db_user = await db.get(User, user_id)
-                            if not db_user:
-                                new_user = User(
-                                    id=user_id,
-                                    username=user_info.get("username"),
-                                    first_name=user_info.get("first_name"),
-                                    level=1,
-                                    free_points=0,
-                                    distributed_points=0,
-                                    ref_points=0,
-                                    payout_bonus=0,
-                                    balance=0.0,
-                                    current_slot_count=5,
-                                    timer_speed_multiplier=1.0,
-                                    payout_rate=1.0
-                                )
-                                db.add(new_user)
-                                await db.commit()
-                                created = True
-                                logger.info(f"Root: CREATED new user {user_id} (first_name={user_info.get('first_name')})")
-                            else:
-                                logger.info(f"Root: existing user {user_id}")
-                            break
-                else:
-                    logger.warning("Root: no 'user=' in initData parts")
-            except json.JSONDecodeError as e:
-                logger.error(f"Root: JSON decode fail after unquote: {e}, raw part[5:]={part[5:][:100] if 'part' in locals() else 'no part'}")
-            except Exception as e:
-                logger.error(f"Root: parse/unexpected error: {e}")
-                await db.rollback()
-        else:
-            logger.warning("Root: initData auth FAIL (HMAC mismatch)")
-    else:
-        logger.warning("Root: no init_data header (not from Telegram WebApp?)")
-
-    if created:
-        logger.info(f"Root: User creation complete for {user_id}")
+    if init_data and verify_telegram_initdata(init_data, BOT_TOKEN):
+        try:
+            for part in init_data.split("&"):
+                if part.startswith("user="):
+                    user_str = urllib.parse.unquote(part[5:])
+                    user_info = json.loads(user_str)
+                    user_id = user_info.get("id")
+                    if user_id:
+                        db_user = await db.get(User, user_id)
+                        if not db_user:
+                            new_user = User(
+                                id=user_id,
+                                username=user_info.get("username"),
+                                first_name=user_info.get("first_name"),
+                                level=1,
+                                free_points=0,
+                                distributed_points=0,
+                                ref_points=0,
+                                payout_bonus=0,
+                                balance=0.0,
+                                current_slot_count=5,
+                                timer_speed_multiplier=1.0,
+                                payout_rate=1.0
+                            )
+                            db.add(new_user)
+                            await db.commit()
+                    break
+        except Exception:
+            pass
 
     return FileResponse("static/index.html")
 
@@ -305,7 +388,6 @@ async def root(request: Request, db: AsyncSession = Depends(get_db)):
 async def health():
     return {"status": "ok", "message": "MellStarGame ready"}
 
-logger.info("Тест с новой машины!")
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 10000)))

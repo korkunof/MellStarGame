@@ -1,3 +1,4 @@
+# backend/models.py
 from sqlalchemy import (
     Column,
     BigInteger,
@@ -38,6 +39,10 @@ class User(Base):
     timer_speed_multiplier = Column(Float, default=1.0)  # Скорость таймера
     payout_rate = Column(Float, default=1.0)  # Выплата звёзд (мультипликатор)
 
+    # === НОВЫЕ ПОЛЯ ДЛЯ ПРОТОТИПА ТАЙМЕРА ===
+    timer_progress = Column(Float, default=0.0)  # 0..100 %
+    timer_running = Column(Boolean, default=False)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
 
@@ -64,7 +69,7 @@ class UserSlot(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(BigInteger, index=True)
     slot_id = Column(Integer, index=True)
-    status = Column(String, default="active")  # active / need_subscribe / completed
+    status = Column(String, default="active")  # active / subscribed / completed / need_subscribe
     subscribed_at = Column(DateTime(timezone=True), nullable=True)
 
 
