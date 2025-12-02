@@ -31,8 +31,11 @@ const payoutCosts = [10,11,13,17,24,36,58,98,127,166,215,280,364,473,615,677,744
 // [НАВИГАЦИЯ]
 // ===================================
 document.querySelectorAll(".nav-item").forEach(btn => {
+  btn.style.cursor = "pointer";  // ← ФИКС: Hover эффект (pointer)
+  btn.onmouseover = () => btn.style.opacity = "0.8";  // ← ФИКС: Hover реакция
+  btn.onmouseout = () => btn.style.opacity = "1";
   btn.onclick = () => {
-    console.log("Nav clicked:", btn.dataset.page);  // DEBUG: Клик сработал?
+    console.log("Nav clicked:", btn.dataset.page);  // DEBUG
     document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
@@ -55,6 +58,9 @@ function initStatsToggle() {
   const collapsedStats = document.getElementById("collapsedStats");
 
   if (btn) {
+    btn.style.cursor = "pointer";  // ← ФИКС: Hover
+    btn.onmouseover = () => btn.style.opacity = "0.8";
+    btn.onmouseout = () => btn.style.opacity = "1";
     btn.onclick = () => {
       const isActive = btn.classList.contains("active");
       btn.textContent = isActive ? "Скрыть" : "Полная";
