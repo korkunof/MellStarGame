@@ -146,10 +146,10 @@ async def get_user(user_id: int, request: Request, db: AsyncSession = Depends(ge
         db.add(result)
         await db.commit()
         logger.info(f"Created new user via API: {user_id}")
-        return {"new_user": True, "level": result.level, "free_points": result.free_points, "ref_points": result.ref_points, "payout_bonus": result.payout_bonus, "balance": result.balance, "current_boost_level": result.current_boost_level, "current_checkpoint": result.current_checkpoint, "checkpoint_progress": result.checkpoint_progress}
+        return {"new_user": True, "level": result.level, "free_points": result.free_points, "distributed_points": result.distributed_points, "ref_points": result.ref_points, "payout_bonus": result.payout_bonus, "balance": result.balance, "current_slot_count": result.current_slot_count, "timer_speed_multiplier": result.timer_speed_multiplier, "payout_rate": result.payout_rate, "current_boost_level": result.current_boost_level, "current_checkpoint": result.current_checkpoint, "checkpoint_progress": result.checkpoint_progress}
     else:
         logger.info(f"Existing user via API: {user_id}")
-        return {"level": result.level, "free_points": result.free_points, "ref_points": result.ref_points, "payout_bonus": result.payout_bonus, "balance": result.balance, "current_boost_level": result.current_boost_level, "current_checkpoint": result.current_checkpoint, "checkpoint_progress": result.checkpoint_progress}
+        return {"level": result.level, "free_points": result.free_points, "distributed_points": result.distributed_points, "ref_points": result.ref_points, "payout_bonus": result.payout_bonus, "balance": result.balance, "current_slot_count": result.current_slot_count, "timer_speed_multiplier": result.timer_speed_multiplier, "payout_rate": result.payout_rate, "current_boost_level": result.current_boost_level, "current_checkpoint": result.current_checkpoint, "checkpoint_progress": result.checkpoint_progress}
 
 @app.post("/api/user/{user_id}")
 async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(get_db)):
@@ -160,9 +160,9 @@ async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(g
         raise HTTPException(status_code=404, detail="User not found")
     
     allowed = {
-        "level", "free_points", "payout_bonus", "balance",
+        "level", "free_points", "distributed_points", "payout_bonus", "balance",
         "ref_points", "current_boost_level", "timer_started_at",
-        "current_checkpoint", "checkpoint_progress"
+        "current_checkpoint", "checkpoint_progress", "current_slot_count", "timer_speed_multiplier", "payout_rate"
     }
     for key, value in payload.items():
         if key in allowed and hasattr(user, key):

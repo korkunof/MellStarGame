@@ -21,16 +21,22 @@ class User(Base):
 
     level = Column(Integer, default=1)
     free_points = Column(Integer, default=0)
-    payout_bonus = Column(Integer, default=0)
+    distributed_points = Column(Integer, default=0)  # ← НОВОЕ: Распределённые очки
+    payout_bonus = Column(Integer, default=0)  # Допвыплаты (бонус к выплате)
     balance = Column(Float, default=0.0)
 
     timer_started_at = Column(DateTime(timezone=True), nullable=True)
     current_checkpoint = Column(Integer, default=0)
     checkpoint_progress = Column(Float, default=0.0)
 
-    ref_points = Column(Integer, default=0)
+    ref_points = Column(Integer, default=0)  # Реферальные очки
     current_boost_level = Column(Integer, default=0)
     referrer_id = Column(BigInteger, nullable=True)
+
+    # ← НОВОЕ: Показатели за уровень
+    current_slot_count = Column(Integer, default=5)  # Кол-во ячеек слотов
+    timer_speed_multiplier = Column(Float, default=1.0)  # Скорость таймера
+    payout_rate = Column(Float, default=1.0)  # Выплата звёзд (мультипликатор)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
