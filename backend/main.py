@@ -234,7 +234,7 @@ async def get_user_slots(user_id: int, request: Request, db: AsyncSession = Depe
 
     # build response
     result = []
-    for us in current_user_slots:
+    for us in sorted(current_user_slots, key=lambda us: us.slot_id):
         slot = await db.get(PurchasedAdSlot, us.slot_id)
         if slot:
             result.append({
@@ -245,11 +245,8 @@ async def get_user_slots(user_id: int, request: Request, db: AsyncSession = Depe
                 "status": us.status
             })
 
-    vip_res = [r for r in result if r["type"] == "vip"]
-    std_res = [r for r in result if r["type"] != "vip"]
-    shuffle(vip_res)
-    shuffle(std_res)
-    return vip_res + std_res
+
+    return result
 
 # ======================
 # Subscribe slot

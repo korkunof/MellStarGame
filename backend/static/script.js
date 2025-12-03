@@ -378,12 +378,14 @@ async function fetchUserProgress() {
 }
 
 function updateTimerProgress() {
-    const bar = document.getElementById('progressFill');
-    if (!bar) return;
-    bar.style.width = Math.min(100, user.progress || 0) + '%';
-    bar.style.backgroundColor = user.timer_running ? 'green' : 'red';
-    const prog = document.getElementById('progressPercent');
-    if (prog) prog.textContent = ((user.progress||0).toFixed(1)) + '%';
+  const bar = document.getElementById('progressFill');
+  if (bar) bar.style.width = `${user.progress}%`;
+  // ... (остальное)
+  const checkpoints = document.querySelectorAll('.checkpoint');
+  checkpoints.forEach((cp, index) => {
+    if (index < user.current_checkpoint) cp.classList.add('passed');
+    else cp.classList.remove('passed');
+  });
 }
 
 // renderAdSlots adapted to server-driven slots
