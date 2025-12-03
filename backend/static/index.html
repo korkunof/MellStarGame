@@ -79,7 +79,7 @@
 
       <h3 class="stats-title" style="margin-top: 28px; text-align: center;">Статистика слотов</h3>
 
-      <!-- Список слотов в статистике (включая кнопку удаления) -->
+      <!-- === КОНТЕЙНЕР СЛОТОВ (ИНИЦИАЛЬНО ПУСТОЙ, ЗАПОЛНЯЕТ JS ИЗ БД) === -->
       <div id="adSlotsContainer"></div>
 
       <button class="buy-slot">Купить слот</button>
@@ -94,7 +94,7 @@
 
       <div id="timerBox" class="timer-box">
         <div class="timer-label">Таймер:</div>
-        <div id="timerDisplay" class="timer-display">00:00</div>
+        <div id="timerDisplay" class="timer-display">00:00:00</div>
       </div>
 
       <div class="progress-section">
@@ -114,13 +114,12 @@
         </div>
       </div>
 
-      <!-- Контейнер ячеек — здесь рендерит script.js -->
+      <!-- === НОВЫЙ КОНТЕЙНЕР ДЛЯ ОТРИСОВКИ СЛОТОВ ПО ID ИЗ БД === -->
       <div id="adSlotsGrid" class="slots-grid"></div>
     </section>
 
     <!-- ПРОКАЧКА -->
     <section id="upgrade" class="page">
-      <!-- ... (не изменялось) -->
       <div class="upgrade-block">
         <div class="upgrade-header">
           <strong>Уровень <span id="currLevelDisplay">2</span> / 45</strong><br>
@@ -154,17 +153,51 @@
         </div>
       </div>
 
-      <!-- Boost & payout блоки -->
-      <!-- ... (не изменялось) -->
+      <!-- Разгон -->
+      <div class="upgrade-block" id="boostSection">
+        <div class="upgrade-header">
+          <strong>Разгон за рефералов</strong>
+        </div>
+
+        <div class="upgrade-content">
+          <p>Очков рефералов получено: <strong><span id="refPointsDisplay" class="pink">4</span></strong></p>
+
+          <p>Выбери уровень разгона:</p>
+
+          <div class="boost-levels">
+            <button class="boost-btn" data-level="1">1 - 25%</button>
+            <button class="boost-btn" data-level="2">2 - 50%</button>
+            <button class="boost-btn" data-level="3">3 - 75%</button>
+            <button class="boost-btn" data-level="4">4 - 100%</button>
+          </div>
+
+          <button id="applyBoost" class="btn-apply-boost">применить к чекпоинту</button>
+          <button id="inviteFriendBtn" class="btn-invite">Пригласить друга</button>
+        </div>
+      </div>
+
+      <!-- Доп. выплата -->
+      <div class="upgrade-block">
+        <div class="upgrade-header">
+          <strong>Дополнительная прокачка выплат</strong>
+        </div>
+
+        <div class="upgrade-content">
+          <p>выплат за чекпоинт сейчас: <strong><span id="currentPayout">10</span></strong></p>
+          <p>дополнительных звёзд куплено: <strong><span id="extraStarsBought">0</span></strong></p>
+          <hr class="divider">
+          <p class="highlight-title">Повысить выплату на 1 звезду</p>
+          <p class="cost">Цена: <strong><span id="payoutCost">10</span> ⭐</strong></p>
+          <button id="buyPayout" class="btn-buy-payout">ПОВЫСИТЬ</button>
+        </div>
+      </div>
     </section>
 
     <!-- ПОКУПКА СЛОТА -->
     <section id="buy" class="page">
-      <!-- ... (оставляем как есть) -->
       <h2 class="buy-title">Купить рекламный слот</h2>
 
       <div class="buy-form">
-        <!-- форма покупки осталась прежней -->
         <div class="form-group">
           <label>платформа</label>
           <select id="platformSelect"><option value="telegram">telegram</option></select>
@@ -183,8 +216,8 @@
         <div class="form-group">
           <label>тип слота</label>
           <select id="slotType">
-            <option value="standard">стандарт</option>
-            <option value="vip">VIP слот</option>
+            <option value="стандарт">стандарт</option>
+            <option value="VIP слот">VIP слот</option>
           </select>
         </div>
 

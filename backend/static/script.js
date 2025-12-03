@@ -1,6 +1,6 @@
 ﻿// static/script.js
 // ===================================
-// script.js — обновлён для новой логики слотов + таймера
+// script.js — ваша версия, расширенная для работы с бэкендом
 // ===================================
 
 const tg = window.Telegram?.WebApp || { initDataUnsafe: {}, initData: '', showAlert: (m)=>alert(m) };
@@ -20,7 +20,7 @@ let user = {
   balance: 9999,
   progress: 0,
   adSlots: [],
-  subSlots: [], // will be filled by server
+  subSlots: Array(5).fill(null).map((_, i) => ({ id: i, status: "empty", expires: null })),
   current_slot_count: 5,
   timer_speed_multiplier: 1.0,
   payout_rate: 1.0,
@@ -111,14 +111,39 @@ function updateMain(){
   updateTimerProgress();
 }
 
-// RENDERING HOME SLOTS (with delete button)
+// SLOTS helpers (createSlotCard kept for local UI consistency)
+function createSlotCard(slot){
+  const slotCard = document.createElement('div');
+  slotCard.className = `slot-card ${slot.status||'empty'}`;
+  slotCard.style.display = 'flex';
+  slotCard.style.justifyContent = 'space-between';
+  slotCard.style.alignItems = 'center';
+  slotCard.style.padding = '12px';
+  const left = document.createElement('div');
+  left.style.flex = '1';
+  const title = document.createElement('div');
+  title.style.fontWeight = '700';
+  title.textContent = slot.channel_username || slot.name || (slot.status === 'empty' ? 'Свободно' : 'Слот');
+  left.appendChild(title);
+  slotCard.appendChild(left);
+  const right = document.createElement('div');
+  const btn = document.createElement('button');
+  btn.className = 'btn-neon';
+  btn.style.padding = '6px 10px';
+  btn.style.fontSize = '0.85rem';
+  setCursor(btn);
+  btn.textContent = 'Детали';
+  btn.onclick = () => tg.showAlert && tg.showAlert('Слот: ' + (slot.channel_username||'—'));
+  right.appendChild(btn);
+  slotCard.appendChild(right);
+  return slotCard;
+}
+
 function renderHomeSlotsList(){
   const container = document.getElementById('adSlotsContainer');
   if (!container) return;
   container.innerHTML = '';
-
-  // show list of current subSlots (those returned from API) in the stats area
-  if (!user.subSlots || user.subSlots.length === 0){
+  if (!user.adSlots || user.adSlots.length === 0){
     const empty = document.createElement('div');
     empty.className = 'slot-card empty';
     empty.style.justifyContent = 'center';
@@ -127,79 +152,15 @@ function renderHomeSlotsList(){
     container.appendChild(empty);
     return;
   }
-
-  user.subSlots.forEach(s=>{
+  user.adSlots.forEach(s=>{
     const el = document.createElement('div');
-    el.className = 'slot-card ' + (s.status||'empty');
-    el.style.display = 'flex';
-    el.style.justifyContent = 'space-between';
-    el.style.alignItems = 'center';
-    el.style.padding = '10px';
-    const left = document.createElement('div');
-    left.innerHTML = `<strong>${s.channel_username || 'Свободно'}</strong><div style="font-size:0.85rem;color:#b8a8e0">${s.type||''}</div>`;
-    el.appendChild(left);
-
-    const right = document.createElement('div');
-    right.style.display = 'flex';
-    right.style.gap = '8px';
-    right.style.alignItems = 'center';
-
-    if (s.status === 'subscribed') {
-      const badge = document.createElement('div');
-      badge.textContent = 'Подписано';
-      badge.style.padding = '6px 10px';
-      badge.style.borderRadius = '12px';
-      badge.style.background = 'linear-gradient(45deg,#26a26a,#4ee07a)';
-      badge.style.color = 'white';
-      right.appendChild(badge);
-    } else if (s.status === 'need_subscribe' || s.status === 'active') {
-      const btn = document.createElement('button');
-      btn.className = 'btn-neon';
-      btn.textContent = 'Подписаться';
-      setCursor(btn);
-      btn.onclick = () => subscribeSlot(s.slot_id);
-      right.appendChild(btn);
-    } else {
-      const info = document.createElement('div');
-      info.textContent = s.status || '—';
-      right.appendChild(info);
-    }
-
-    // delete button for testing (visible in stats)
-    const del = document.createElement('button');
-    del.textContent = 'Удалить';
-    del.style.background = '#333';
-    del.style.color = '#fff';
-    del.style.border = 'none';
-    del.style.padding = '6px 8px';
-    del.style.borderRadius = '8px';
-    setCursor(del);
-    del.onclick = async () => {
-      if (!confirm('Удалить слот из аккаунта (тест)?')) return;
-      try {
-        const res = await fetch('/api/delete_user_slot', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json', 'X-Telegram-WebApp-InitData': tg.initData || ''},
-          body: JSON.stringify({ user_id: tg.initDataUnsafe?.user?.id || 0, slot_id: s.slot_id })
-        });
-        if (res.ok) {
-          tg.showAlert && tg.showAlert('Слот удалён (тест)');
-          await loadSlots();
-        } else {
-          tg.showAlert && tg.showAlert('Ошибка удаления');
-        }
-      } catch (e) {
-        tg.showAlert && tg.showAlert('Ошибка сети');
-      }
-    };
-    right.appendChild(del);
-
-    el.appendChild(right);
+    el.className = 'slot-card active';
+    el.textContent = s.channel_username || s.channel_name || 'Слот';
     container.appendChild(el);
   });
 }
 
-// UPGRADE/BUY helpers left unchanged (only minor hooks)
+// UPGRADE handlers (unchanged)
 function initUpgradePage(){
   const container = qs('.boost-levels');
   if (!container) { console.warn('boost-levels not found'); return; }
@@ -209,7 +170,12 @@ function initUpgradePage(){
     b.className = 'boost-btn' + (i <= (user.boostLevel||0) ? ' active' : '');
     b.textContent = `${i} - ${i*25}%`;
     setCursor(b);
-    b.onclick = ()=>{ /* simplified for prototype */ 
+    b.onclick = ()=>{ /* same logic */ 
+      if (i <= (user.boostLevel||0)){
+        user.boostLevel = i;
+        initUpgradePage(); updateMain();
+        return;
+      }
       if ((user.refPoints||0) >= i){
         user.boostLevel = i;
         user.refPoints -= i;
@@ -234,10 +200,31 @@ function initUpgradePage(){
       } else tg.showAlert && tg.showAlert('Недостаточно очков!');
     };
   }
-  // other upgrade buttons...
+
+  const buyPayout = document.getElementById('buyPayout');
+  if (buyPayout){
+    setCursor(buyPayout);
+    buyPayout.onclick = ()=>{ /* as before */ 
+      const cost = parseInt(document.getElementById('payoutCost')?.textContent || '10', 10);
+      if ((user.balance||0) >= cost) {
+        user.balance -= cost;
+        user.currentPayout = (user.currentPayout||10) + 1;
+        tg.showAlert && tg.showAlert('Выплата увеличена!');
+        updateMain();
+      } else tg.showAlert && tg.showAlert('Недостаточно звёзд!');
+    };
+  }
+
+  const invite = document.getElementById('inviteFriendBtn');
+  if (invite) { setCursor(invite); invite.onclick = ()=>{ tg.sendData && tg.sendData('invite'); tg.showAlert && tg.showAlert('Приглашение отправлено'); }; }
+
+  const resetLevelBtn = document.getElementById('resetLevelBtn');
+  if (resetLevelBtn){ setCursor(resetLevelBtn); resetLevelBtn.onclick = ()=>{ user.level = 1; user.freePoints = 0; updateMain(); tg.showAlert && tg.showAlert('Сброшено (тест)'); }; }
+  const addLevelBtn = document.getElementById('addLevelBtn');
+  if (addLevelBtn){ setCursor(addLevelBtn); addLevelBtn.onclick = ()=>{ user.level = (user.level||1)+1; user.freePoints = (user.freePoints||0)+1; updateMain(); tg.showAlert && tg.showAlert('+1 уровень (тест)'); }; }
 }
 
-// BUY
+// BUY page
 function initBuyPage(){
   const name = qs('#slotName','#adName');
   const link = qs('#slotLink','#adLink');
@@ -297,12 +284,23 @@ function initBuyPage(){
         if (resp.ok) {
           const data = await resp.json();
           tg.showAlert && tg.showAlert('Слот создан! ID: ' + (data.slot_id || '—'));
-          await loadSlots();
+          user.adSlots = user.adSlots || [];
+          user.adSlots.push({ channel_username: channelUsername, id: data.slot_id || Date.now() });
+          user.subSlots = user.subSlots || [];
+          if (user.subSlots.length < (user.current_slot_count||5)) {
+            user.subSlots.push({ id: user.subSlots.length, status: 'empty', expires: null });
+          }
+          resetBtn && resetBtn.click();
           document.querySelector('[data-page="home"]').click();
+          renderAdSlots();
+          renderHomeSlotsList();
         } else {
+          const txt = await resp.text().catch(()=>null);
+          console.error('Slot create failed', resp.status, txt);
           tg.showAlert && tg.showAlert('Ошибка создания слота');
         }
       } catch (e) {
+        console.error('Network error create slot', e);
         tg.showAlert && tg.showAlert('Ошибка сети при создании слота');
       }
     };
@@ -319,14 +317,13 @@ async function fetchUserSlots() {
         });
         if (!res.ok) return [];
         const data = await res.json();
-        // data already contains exactly N slots or empties
         return data.map(s => ({
             slot_id: s.slot_id,
-            channel_username: s.channel_username,
-            link: s.link || '#',
+            channel_username: s.title,
+            link: s.link,
             type: s.type,
             status: s.status,
-            subscribed_at: s.subscribed_at || null
+            expires: null
         }));
     } catch (e) {
         console.warn('fetchUserSlots error', e);
@@ -376,21 +373,13 @@ async function fetchUserProgress() {
 function updateTimerProgress() {
     const bar = document.getElementById('progressFill');
     if (!bar) return;
-    const percent = Math.max(0, Math.min(100, user.progress || 0));
-    bar.style.width = percent + '%';
-    // color by running state
-    if (user.timer_running) {
-        bar.style.background = 'linear-gradient(90deg, #ff4d8d, #ff2af5)';
-        bar.style.boxShadow = '0 0 12px #ff2af5';
-    } else {
-        bar.style.background = 'linear-gradient(90deg, #ff3333, #ff7a7a)';
-        bar.style.boxShadow = '0 0 8px #ff3333';
-    }
+    bar.style.width = Math.min(100, user.progress || 0) + '%';
+    bar.style.backgroundColor = user.timer_running ? 'green' : 'red';
     const prog = document.getElementById('progressPercent');
     if (prog) prog.textContent = ((user.progress||0).toFixed(1)) + '%';
 }
 
-// renderAdSlots: ensure exactly current_slot_count boxes shown
+// renderAdSlots adapted to server-driven slots
 function renderAdSlots(){
   const grid = document.getElementById('adSlotsGrid');
   if (!grid) {
@@ -398,97 +387,42 @@ function renderAdSlots(){
     return;
   }
   grid.innerHTML = '';
-  const slots = user.subSlots || [];
-  const total = user.current_slot_count || 5;
-
-  // ensure array length = total (server already should, but double-check)
-  const padded = slots.slice(0, total);
-  while (padded.length < total) padded.push({ slot_id: null, channel_username: null, link: '#', type: null, status: 'empty' });
-
-  padded.forEach(s=>{
+  if (!user.subSlots || user.subSlots.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'slot-card empty';
+    empty.style.justifyContent = 'center';
+    empty.style.fontStyle = 'italic';
+    empty.textContent = 'Нет слотов';
+    grid.appendChild(empty);
+    return;
+  }
+  user.subSlots.forEach(s=>{
     const el = document.createElement('div');
     el.className = `slot-card ${s.status||'empty'}`;
-    el.dataset.slotId = s.slot_id || '';
     el.style.display = 'flex';
-    el.style.flexDirection = 'row';
     el.style.justifyContent = 'space-between';
     el.style.alignItems = 'center';
     el.style.padding = '10px';
-    el.style.minHeight = '56px';
-
-    const left = document.createElement('div');
-    left.style.display = 'flex';
-    left.style.flexDirection = 'column';
-    left.style.gap = '6px';
-    left.style.flex = '1';
-
-    const title = document.createElement('div');
-    title.style.fontWeight = '700';
-    title.textContent = s.channel_username || 'Свободно';
-    left.appendChild(title);
-
-    const subtitle = document.createElement('div');
-    subtitle.style.fontSize = '0.82rem';
-    subtitle.style.color = '#b8a8e0';
-    subtitle.textContent = s.type ? (s.type.toUpperCase()) : '—';
-    left.appendChild(subtitle);
-
-    el.appendChild(left);
-
-    const right = document.createElement('div');
-    right.style.display = 'flex';
-    right.style.gap = '8px';
-    right.style.alignItems = 'center';
-
-    if (s.status === 'subscribed') {
-      const b = document.createElement('button');
-      b.textContent = 'Подписано';
-      b.disabled = true;
-      b.style.background = '#2ecc71';
-      b.style.color = 'white';
-      b.style.border = 'none';
-      b.style.padding = '6px 10px';
-      b.style.borderRadius = '10px';
-      right.appendChild(b);
-    } else if (s.status === 'need_subscribe' || s.status === 'active') {
-      const btn = document.createElement('button');
-      btn.textContent = 'Подписаться';
-      btn.style.padding = '8px 12px';
-      btn.className = 'btn-neon';
+    el.innerHTML = `
+        <span>${s.channel_username} (${s.type})</span>
+        <a href="${s.link}" target="_blank">Перейти</a>
+        <button ${s.status === 'subscribed' || s.status === 'completed' ? 'disabled' : ''} data-id="${s.slot_id}">
+            ${s.status === 'subscribed' || s.status === 'completed' ? 'Подписано' : 'Подписаться'}
+        </button>
+    `;
+    const btn = el.querySelector('button');
+    if (btn && !btn.disabled) {
       setCursor(btn);
       btn.onclick = () => subscribeSlot(s.slot_id);
-      right.appendChild(btn);
-    } else if (s.status === 'completed') {
-      const txt = document.createElement('div');
-      txt.textContent = 'Завершён';
-      right.appendChild(txt);
-    } else {
-      // empty
-      const txt = document.createElement('div');
-      txt.textContent = 'Пусто';
-      txt.style.opacity = '0.6';
-      right.appendChild(txt);
     }
-
-    const go = document.createElement('a');
-    go.href = s.link || '#';
-    go.target = '_blank';
-    go.textContent = 'Перейти';
-    go.style.fontSize = '0.85rem';
-    right.appendChild(go);
-
-    el.appendChild(right);
     grid.appendChild(el);
   });
-
   renderHomeSlotsList();
 
-  // Timer auto-start logic: if all non-empty slots are subscribed -> start timer
-  const activeCount = (user.subSlots || []).filter(s => s.slot_id !== null && s.status === 'subscribed').length;
-  const nonEmptyCount = (user.subSlots || []).filter(s => s.slot_id !== null).length;
-  if (nonEmptyCount > 0 && activeCount === nonEmptyCount) {
+  // Timer auto-start logic: if all slots are subscribed -> start timer
+  const activeCount = user.subSlots.filter(s => s.status === 'subscribed').length;
+  if (activeCount === user.subSlots.length && user.subSlots.length > 0) {
       if (!timerInterval) startTimer();
-      user.timer_running = true;
   } else {
       if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
       user.timer_running = false;
@@ -496,46 +430,30 @@ function renderAdSlots(){
   }
 }
 
-// ==================== Timer (client local) ====================
-// Client will simulate progress based on user.timer_running and current speed.
-// Forward progress increment per tick depends on timer_speed_multiplier and tickSeconds.
-// For tests: 1 checkpoint = 60 seconds -> full = 5*60 = 300 seconds -> progress 0..100 represents one checkpoint (we keep 0..100)
+// ==================== Timer (local) ====================
 let timerInterval = null;
-const TICK_MS = 1000;
 function startTimer() {
     if (timerInterval) return;
     user.timer_running = true;
     updateTimerProgress();
     timerInterval = setInterval(() => {
-        // when running forward
-        if (user.timer_running) {
-            // advance: we want one checkpoint = 60s at base speed => progress increases by (100 / 60) per second * speed multiplier
-            const basePerSec = 100.0 / 60.0;
-            const delta = basePerSec * (user.timer_speed_multiplier || 1.0);
-            user.progress = (user.progress || 0) + delta;
-            if (user.progress >= 100) {
-                // reached checkpoint -> award something and reset to 0
-                user.progress = 0;
-                user.balance = (user.balance || 0) + ((user.payout_rate || 1) * 10); // test payout
-                tg.showAlert && tg.showAlert('Чекпоинт завершён! +10 ⭐ (тест)');
-                // persist minimal state
-                const userId = tg.initDataUnsafe?.user?.id || 0;
-                fetch(`/api/user/${userId}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Telegram-WebApp-InitData': tg.initData || '' },
-                    body: JSON.stringify({ checkpoint_progress: 0, timer_progress: 0, balance: user.balance })
-                }).catch(()=>{});
-            }
-        } else {
-            // backward motion when not all subscribed: count backwards at x2 speed (per spec)
-            // backward delta: basePerSec * 2 * speedMultiplier
-            const basePerSec = 100.0 / 60.0;
-            const delta = basePerSec * 2 * (user.timer_speed_multiplier || 1.0);
-            // ensure we don't go below checkpoint boundary: for prototype we allow stop at 0
-            user.progress = Math.max(0, (user.progress || 0) - delta);
+        user.progress = (user.progress || 0) + (user.timer_speed_multiplier || 1) * 0.1;
+        if (user.progress >= 100) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            user.progress = 0;
+            user.balance = (user.balance || 0) + ((user.payout_rate || 1) * 10);
+            tg.showAlert && tg.showAlert('Цикл завершён! +10 ⭐');
+            // Persist progress=0 and balance to backend
+            const userId = tg.initDataUnsafe?.user?.id || 0;
+            fetch(`/api/user/${userId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Telegram-WebApp-InitData': tg.initData || '' },
+                body: JSON.stringify({ checkpoint_progress: 0, timer_progress: 0, balance: user.balance })
+            }).catch(()=>{});
         }
         updateTimerProgress();
-    }, TICK_MS);
+    }, 1000);
 }
 
 // INIT
@@ -551,6 +469,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       });
       if (r.ok){
         const data = await r.json();
+        if (data.new_user) tg.showAlert && tg.showAlert('Аккаунт создан! Добро пожаловать!');
         user = {
           level: data.level || 1,
           freePoints: data.free_points || 0,
@@ -560,7 +479,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
           progress: data.timer_progress || data.checkpoint_progress || 0,
           boostLevel: data.current_boost_level || 0,
           adSlots: [],
-          subSlots: Array(data.current_slot_count || 5).fill(null).map((_,i)=>({ slot_id:null, channel_username:null, status:'empty' })),
+          subSlots: Array(data.current_slot_count || 5).fill(null).map((_,i)=>({ id:i, status:'empty', expires:null })),
           current_slot_count: data.current_slot_count || 5,
           timer_speed_multiplier: data.timer_speed_multiplier || 1.0,
           payout_rate: data.payout_rate || 1.0,
@@ -589,8 +508,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     await loadSlots();
     const prog = await fetchUserProgress();
     if (prog) {
+      // only overwrite local progress if backend has a believable value
       if (typeof prog.timer_progress === 'number') user.progress = prog.timer_progress;
       if (typeof prog.timer_running === 'boolean') user.timer_running = prog.timer_running;
+      // if backend reports running true and timer not started locally -> start local timer
       if (user.timer_running && !timerInterval) startTimer();
       if (!user.timer_running && timerInterval) { clearInterval(timerInterval); timerInterval = null; }
       updateTimerProgress();

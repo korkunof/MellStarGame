@@ -6,13 +6,17 @@ import urllib.parse
 from contextlib import asynccontextmanager
 import asyncio
 from random import shuffle
-from datetime import datetime, timezone, timedelta
-import hashlib
+from datetime import datetime
 
 from fastapi import FastAPI, Request, Depends, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
+
+from telegram import Update
+from telegram.ext import Application, CommandHandler, CallbackContext
+from telegram.constants import ParseMode
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from dotenv import load_dotenv
 
@@ -21,39 +25,34 @@ from database import engine, AsyncSessionLocal
 from models import User, Base, PurchasedAdSlot, UserSlot
 from auth import verify_telegram_initdata
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, exists, and_, or_, not_
+from sqlalchemy import select, exists
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ======================
+# Config
+# ======================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "")
 
-# Telegram bot parts are optional for prototype
-try:
-    from telegram import Update
-    from telegram.ext import Application, CommandHandler, CallbackContext
-    from telegram.constants import ParseMode
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-    application = None
-    if BOT_TOKEN:
-        application = Application.builder().token(BOT_TOKEN).build()
+application = None
+if BOT_TOKEN:
+    application = Application.builder().token(BOT_TOKEN).build()
 
-    async def start(update: Update, context: CallbackContext):
-        web_url = FRONTEND_URL or f"{WEBHOOK_URL.rsplit('/', 1)[0]}/"
-        keyboard = [[InlineKeyboardButton("Играть", web_app=WebAppInfo(url=web_url))]]
-        await update.message.reply_text(
-            "Привет! Это <b>MellStarGame</b>\nНажми «Играть»!",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode=ParseMode.HTML
-        )
+async def start(update: Update, context: CallbackContext):
+    web_url = FRONTEND_URL or f"{WEBHOOK_URL.rsplit('/', 1)[0]}/"
+    keyboard = [[InlineKeyboardButton("Играть", web_app=WebAppInfo(url=web_url))]]
+    await update.message.reply_text(
+        "Привет! Это <b>MellStarGame</b>\nНажми «Играть»!",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.HTML
+    )
 
-    if application:
-        application.add_handler(CommandHandler("start", start))
-except Exception:
-    application = None
+if application:
+    application.add_handler(CommandHandler("start", start))
 
 # ======================
 # Lifespan
@@ -93,47 +92,10 @@ async def get_db():
         yield session
 
 # ======================
-# Helpers
-# ======================
-def seeded_value_for_user_slot(user_id: int, slot_id: int):
-    """Deterministic pseudo-random number [0..1) based on user and slot to keep stable order."""
-    h = hashlib.md5(f"{user_id}:{slot_id}".encode('utf-8')).hexdigest()
-    # take first 15 hex digits -> int
-    v = int(h[:15], 16)
-    return v / float(0xFFFFFFFFFFFFFFF)
-
-async def ensure_user(db: AsyncSession, user_id: int):
-    user = await db.get(User, user_id)
-    if not user:
-        # create default user
-        user = User(
-            id=user_id,
-            level=1,
-            free_points=0,
-            distributed_points=0,
-            ref_points=0,
-            payout_bonus=0,
-            balance=0.0,
-            current_slot_count=5,
-            timer_speed_multiplier=1.0,
-            payout_rate=1.0,
-            timer_progress=0.0,
-            timer_running=False,
-            current_checkpoint=0,
-            checkpoint_progress=0.0
-        )
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-    return user
-
-# ======================
-# Webhook (telegram optional)
+# Telegram Webhook
 # ======================
 @app.post("/webhook")
 async def webhook(request: Request):
-    if not application:
-        return {"status": "ok", "note": "no-telegram"}
     update_json = await request.json()
     update = Update.de_json(update_json, application.bot)
     if update:
@@ -149,25 +111,40 @@ async def get_user(user_id: int, request: Request, db: AsyncSession = Depends(ge
     if init_data and not verify_telegram_initdata(init_data, BOT_TOKEN):
         raise HTTPException(status_code=403, detail="Auth failed")
 
-    user = await db.get(User, user_id)
-    if not user:
-        user = await ensure_user(db, user_id)
+    result = await db.get(User, user_id)
+    if not result:
+        result = User(
+            id=user_id,
+            level=1,
+            free_points=0,
+            distributed_points=0,
+            ref_points=0,
+            payout_bonus=0,
+            balance=0.0,
+            current_slot_count=5,
+            timer_speed_multiplier=1.0,
+            payout_rate=1.0
+        )
+        db.add(result)
+        await db.commit()
+        await db.refresh(result)
 
     return {
-        "level": user.level,
-        "free_points": user.free_points,
-        "distributed_points": user.distributed_points,
-        "ref_points": user.ref_points,
-        "payout_bonus": user.payout_bonus,
-        "balance": user.balance,
-        "current_slot_count": user.current_slot_count,
-        "timer_speed_multiplier": user.timer_speed_multiplier,
-        "payout_rate": user.payout_rate,
-        "current_boost_level": user.current_boost_level,
-        "current_checkpoint": user.current_checkpoint,
-        "checkpoint_progress": user.checkpoint_progress,
-        "timer_progress": user.timer_progress,
-        "timer_running": user.timer_running,
+        "level": result.level,
+        "free_points": result.free_points,
+        "distributed_points": result.distributed_points,
+        "ref_points": result.ref_points,
+        "payout_bonus": result.payout_bonus,
+        "balance": result.balance,
+        "current_slot_count": result.current_slot_count,
+        "timer_speed_multiplier": result.timer_speed_multiplier,
+        "payout_rate": result.payout_rate,
+        "current_boost_level": result.current_boost_level,
+        "current_checkpoint": result.current_checkpoint,
+        "checkpoint_progress": result.checkpoint_progress,
+        # include timer fields to allow frontend sync
+        "timer_progress": result.timer_progress,
+        "timer_running": result.timer_running,
     }
 
 # ======================
@@ -196,20 +173,6 @@ async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(g
     return {"status": "saved"}
 
 # ======================
-# Helper: pick available PurchasedAdSlot for user (exclude completed history)
-# ======================
-async def get_available_slots_for_user(db: AsyncSession, user_id: int):
-    # exclude slots that user already had completed
-    subq_completed = select(UserSlot.slot_id).where(UserSlot.user_id == user_id, UserSlot.status == "completed")
-    res = await db.execute(
-        select(PurchasedAdSlot).where(
-            PurchasedAdSlot.status == "active",
-            ~PurchasedAdSlot.id.in_(subq_completed)
-        )
-    )
-    return res.scalars().all()
-
-# ======================
 # API: get personal slots for user (assign if less than current_slot_count)
 # ======================
 @app.get("/api/user_slots/{user_id}")
@@ -218,90 +181,78 @@ async def get_user_slots(user_id: int, request: Request, db: AsyncSession = Depe
     if init_data and not verify_telegram_initdata(init_data, BOT_TOKEN):
         raise HTTPException(status_code=403, detail="Auth failed")
 
-    user = await ensure_user(db, user_id)
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-    # get current user slots with interesting statuses
-    cur_res = await db.execute(
+    current_us_res = await db.execute(
         select(UserSlot).where(
             UserSlot.user_id == user_id,
-            UserSlot.status.in_(["active", "subscribed", "need_subscribe"])
+            UserSlot.status.in_(["active", "subscribed"])
         )
     )
-    current_user_slots = cur_res.scalars().all()
+    current_user_slots = current_us_res.scalars().all()
     count_current = len(current_user_slots)
 
-    # if less than desired, assign more
-    if count_current < (user.current_slot_count or 5):
-        available_slots = await get_available_slots_for_user(db, user_id)
+    # assign more if needed
+    if count_current < user.current_slot_count:
+        subq = exists().where(
+            UserSlot.slot_id == PurchasedAdSlot.id,
+            UserSlot.user_id == user_id
+        )
+        available_res = await db.execute(
+            select(PurchasedAdSlot).where(
+                PurchasedAdSlot.status == "active",
+                ~subq
+            )
+        )
+        available_slots = available_res.scalars().all()
 
-        # separate VIP and standard
-        vip = [s for s in available_slots if (s.slot_type or '').lower() in ("vip", "premium")]
-        std = [s for s in available_slots if (s.slot_type or '').lower() not in ("vip", "premium")]
-
-        # stable per-user ordering inside groups using seeded deterministic value
-        vip_sorted = sorted(vip, key=lambda s: seeded_value_for_user_slot(user_id, s.id))
-        std_sorted = sorted(std, key=lambda s: seeded_value_for_user_slot(user_id, s.id))
-
-        to_assign = (vip_sorted + std_sorted)[: max(0, (user.current_slot_count or 5) - count_current)]
+        vip = [s for s in available_slots if s.slot_type == "vip"]
+        std = [s for s in available_slots if s.slot_type != "vip"]
+        shuffle(vip)
+        shuffle(std)
+        to_assign = (vip + std)[: (user.current_slot_count - count_current) ]
 
         for s in to_assign:
             db.add(UserSlot(user_id=user_id, slot_id=s.id, status="active"))
         await db.commit()
 
-        cur_res = await db.execute(
+        current_us_res = await db.execute(
             select(UserSlot).where(
                 UserSlot.user_id == user_id,
-                UserSlot.status.in_(["active", "subscribed", "need_subscribe"])
+                UserSlot.status.in_(["active", "subscribed"])
             )
         )
-        current_user_slots = cur_res.scalars().all()
+        current_user_slots = current_us_res.scalars().all()
 
-    # build response objects joined with PurchasedAdSlot data
+    # timer_running computed (true only when no 'active' slots)
+    has_pending = any(us.status == "active" for us in current_user_slots)
+    if user.timer_running != (not has_pending):
+        user.timer_running = not has_pending
+        await db.commit()
+
+    # build response
     result = []
     for us in current_user_slots:
         slot = await db.get(PurchasedAdSlot, us.slot_id)
         if slot:
             result.append({
                 "slot_id": slot.id,
-                "channel_username": slot.channel_name or slot.channel_username,
+                "title": slot.channel_name,
                 "link": slot.link,
                 "type": slot.slot_type,
-                "status": us.status,
-                "subscribed_at": us.subscribed_at.isoformat() if us.subscribed_at else None
+                "status": us.status
             })
 
-    # Now sort result: VIP first, then standard; inside groups deterministic by seeded value
-    def slot_sort_key(r):
-        t = 0 if (r.get("type") or "").lower() in ("vip", "premium") else 1
-        seeded = seeded_value_for_user_slot(user_id, r["slot_id"])
-        return (t, seeded)
-
-    result_sorted = sorted(result, key=slot_sort_key)
-
-    # Ensure we always return exactly user.current_slot_count slots (fill with empties)
-    needed = (user.current_slot_count or 5)
-    if len(result_sorted) < needed:
-        # append placeholders
-        for i in range(needed - len(result_sorted)):
-            result_sorted.append({
-                "slot_id": None,
-                "channel_username": None,
-                "link": None,
-                "type": None,
-                "status": "empty"
-            })
-
-    # compute timer_running on server-side: RUN only when all visible slots are subscribed
-    non_empty_slots = [r for r in result_sorted if r["slot_id"] is not None]
-    all_subscribed = len(non_empty_slots) > 0 and all(r["status"] == "subscribed" for r in non_empty_slots)
-    if user.timer_running != all_subscribed:
-        user.timer_running = all_subscribed
-        await db.commit()
-
-    return result_sorted
+    vip_res = [r for r in result if r["type"] == "vip"]
+    std_res = [r for r in result if r["type"] != "vip"]
+    shuffle(vip_res)
+    shuffle(std_res)
+    return vip_res + std_res
 
 # ======================
-# POST subscribe_slot
+# Subscribe slot
 # ======================
 @app.post("/api/subscribe_slot")
 async def subscribe_slot(request: Request, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
@@ -313,9 +264,6 @@ async def subscribe_slot(request: Request, background_tasks: BackgroundTasks, db
     if init_data and not verify_telegram_initdata(init_data, BOT_TOKEN):
         raise HTTPException(status_code=403, detail="Auth failed")
 
-    if not user_id or not slot_id:
-        raise HTTPException(status_code=400, detail="user_id and slot_id required")
-
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -325,10 +273,9 @@ async def subscribe_slot(request: Request, background_tasks: BackgroundTasks, db
     if not user_slot:
         raise HTTPException(status_code=404, detail="UserSlot not found")
 
-    if user_slot.status == "subscribed":
-        return {"status": "already_subscribed", "timer_running": user.timer_running}
+    if user_slot.status != "active":
+        return {"status": "already processed", "timer_running": user.timer_running}
 
-    # mark subscribed
     user_slot.status = "subscribed"
     user_slot.subscribed_at = datetime.utcnow()
     await db.commit()
@@ -336,27 +283,20 @@ async def subscribe_slot(request: Request, background_tasks: BackgroundTasks, db
     # schedule close task for this slot (per-user)
     background_tasks.add_task(close_slot_task, user_id, slot_id)
 
-    # recompute timer_running: true only when all visible slots for this user are subscribed
+    # recompute timer_running
     cur_res = await db.execute(
         select(UserSlot).where(
             UserSlot.user_id == user_id,
-            UserSlot.status.in_(["active", "subscribed", "need_subscribe"])
+            UserSlot.status.in_(["active", "subscribed"])
         )
     )
     cur_slots = cur_res.scalars().all()
-    visible_slots = [s for s in cur_slots]  # list of UserSlot
-    # build statuses map
-    if visible_slots:
-        user.timer_running = all(s.status == "subscribed" for s in visible_slots)
-    else:
-        user.timer_running = False
+    user.timer_running = not any(us.status == "active" for us in cur_slots)
     await db.commit()
 
     return {"status": "subscribed", "timer_running": user.timer_running}
 
-# ======================
-# Background: close a subscribed slot after 60s (test)
-# ======================
+# background task to close a subscribed slot after 60s (test)
 async def close_slot_task(user_id: int, slot_id: int):
     await asyncio.sleep(60)
     async with AsyncSessionLocal() as db:
@@ -365,43 +305,7 @@ async def close_slot_task(user_id: int, slot_id: int):
         if user_slot and user_slot.status == "subscribed":
             user_slot.status = "completed"
             await db.commit()
-
-            # assign replacement slot for this user immediately (need_subscribe)
-            # pick one available PurchasedAdSlot user hasn't completed
-            subq_completed = select(UserSlot.slot_id).where(UserSlot.user_id == user_id, UserSlot.status == "completed")
-            av_res = await db.execute(
-                select(PurchasedAdSlot).where(
-                    PurchasedAdSlot.status == "active",
-                    ~PurchasedAdSlot.id.in_(subq_completed)
-                )
-            )
-            available_slots = av_res.scalars().all()
-            # exclude the slot we just completed
-            available_slots = [s for s in available_slots if s.id != slot_id]
-            # vip first, deterministic order per user
-            vip = [s for s in available_slots if (s.slot_type or '').lower() in ("vip", "premium")]
-            std = [s for s in available_slots if (s.slot_type or '').lower() not in ("vip", "premium")]
-            vip_sorted = sorted(vip, key=lambda s: seeded_value_for_user_slot(user_id, s.id))
-            std_sorted = sorted(std, key=lambda s: seeded_value_for_user_slot(user_id, s.id))
-            pick = (vip_sorted + std_sorted)[:1]
-            if pick:
-                new_slot = pick[0]
-                db.add(UserSlot(user_id=user_id, slot_id=new_slot.id, status="need_subscribe"))
-                await db.commit()
-
-            # update user's timer_running (should become False because new need_subscribe)
-            user = await db.get(User, user_id)
-            if user:
-                # fetch remaining visible slots
-                cur_res = await db.execute(
-                    select(UserSlot).where(
-                        UserSlot.user_id == user_id,
-                        UserSlot.status.in_(["active", "subscribed", "need_subscribe"])
-                    )
-                )
-                cur_slots = cur_res.scalars().all()
-                user.timer_running = len(cur_slots) > 0 and all(s.status == "subscribed" for s in cur_slots)
-                await db.commit()
+            # after completion, next get_user_slots will assign a new slot for user if there are available ones
 
 # ======================
 # get user progress (for polling)
@@ -438,24 +342,6 @@ async def create_slot(request: Request, db: AsyncSession = Depends(get_db)):
     return {"status": "created", "slot_id": new_slot.id}
 
 # ======================
-# Delete user slot (for tests) - removes the user's UserSlot entry
-# ======================
-@app.post("/api/delete_user_slot")
-async def delete_user_slot(request: Request, db: AsyncSession = Depends(get_db)):
-    payload = await request.json()
-    user_id = payload.get("user_id")
-    slot_id = payload.get("slot_id")
-    if not user_id or not slot_id:
-        raise HTTPException(status_code=400, detail="user_id and slot_id required")
-    us_res = await db.execute(select(UserSlot).where(UserSlot.user_id == user_id, UserSlot.slot_id == slot_id))
-    user_slot = us_res.scalar()
-    if not user_slot:
-        return {"status": "not_found"}
-    await db.delete(user_slot)
-    await db.commit()
-    return {"status": "deleted"}
-
-# ======================
 # Root
 # ======================
 @app.get("/")
@@ -485,11 +371,7 @@ async def root(request: Request, db: AsyncSession = Depends(get_db)):
                                 balance=0.0,
                                 current_slot_count=5,
                                 timer_speed_multiplier=1.0,
-                                payout_rate=1.0,
-                                timer_progress=0.0,
-                                timer_running=False,
-                                current_checkpoint=0,
-                                checkpoint_progress=0.0
+                                payout_rate=1.0
                             )
                             db.add(new_user)
                             await db.commit()
