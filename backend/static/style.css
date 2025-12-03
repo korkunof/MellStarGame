@@ -1,5 +1,5 @@
 /* =================================== */
-/* [ÃËÎÁÀËÜÍÛÅ ÏÅÐÅÌÅÍÍÛÅ] */
+/* [ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½] */
 /* =================================== */
 :root {
   --bg-main: #0f0a1a;
@@ -18,7 +18,7 @@
 }
 
 /* =================================== */
-/* [ÑÁÐÎÑ] */
+/* [ï¿½ï¿½ï¿½ï¿½ï¿½] */
 /* =================================== */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -53,14 +53,14 @@ body {
 .welcome { font-size: 0.9rem; color: var(--text-light); line-height: 1.5; }
 
 /* =================================== */
-/* [ÑÒÐÀÍÈÖÛ] */
+/* [ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½] */
 /* =================================== */
 .page { display: none; }
 .page.active { display: block; animation: fadeIn 0.3s; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 /* =================================== */
-/* [ÇÀÃÎËÎÂÊÈ È ÏÅÐÅÊËÞ×ÀÒÅËÜ] */
+/* [ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½] */
 /* =================================== */
 .greeting { font-size: 1.6rem; color: var(--neon); text-align: center; margin: 16px 0 8px; }
 .stats-header { display: flex; justify-content: center; align-items: center; gap: 12px; margin: 12px 0 8px; }
@@ -76,7 +76,7 @@ body {
 }
 
 /* =================================== */
-/* [ÑÅÒÊÀ ÑÒÀÒÈÑÒÈÊÈ] */
+/* [ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½] */
 /* =================================== */
 .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
 .stat-card {
@@ -101,7 +101,7 @@ body {
 .pink { color: var(--pink); }
 
 /* =================================== */
-/* [ÑÂ¨ÐÍÓÒÀß ÑÒÀÒÈÑÒÈÊÀ] */
+/* [ï¿½Â¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½] */
 /* =================================== */
 #collapsedStats {
   display: none; background: var(--bg-card); border: 1px solid var(--border); border-radius: 18px;
@@ -111,7 +111,7 @@ body {
 #collapsedStats .divider { display: inline-block; width: 1px; height: 12px; background: var(--text-light); margin: 0 7px; opacity: 0.6; vertical-align: middle; }
 
 /* =================================== */
-/* [ÂÎÇÂÐÀÙ¨ÍÍÀß ØÊÀËÀ ÏÐÎÃÐÅÑÑÀ Ñ ØÀÐÈÊÀÌÈ] */
+/* [ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ù¨ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½] */
 /* =================================== */
 .progress-section { margin: 20px 0; }
 .progress-label { text-align: center; color: var(--text-light); margin-bottom: 8px; }
@@ -120,10 +120,10 @@ body {
 .progress-fill.initial-glow { background: linear-gradient(90deg, #ff4d8d, #ff2af5); box-shadow: 0 0 20px #ff2af5, 0 0 30px rgba(255, 42, 245, 0.6); animation: shimmer 2s infinite; }
 .checkpoints { position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); display: flex; justify-content: space-between; pointer-events: none; z-index: 10; }
 .checkpoint { position: absolute; width: 22px; height: 22px; background: #333; border: 3px solid var(--accent); border-radius: 50%; box-shadow: 0 0 10px var(--accent); transform: translate(-50%, -50%); }
-.checkpoint[data-pos="0%"] { left: 0%; }
-.checkpoint[data-pos="25%"] { left: 25%; }
-.checkpoint[data-pos="50%"] { left: 50%; }
-.checkpoint[data-pos="75%"] { left: 75%; }
+.checkpoint[data-pos="20%"] { left: 20%; }
+.checkpoint[data-pos="40%"] { left: 40%; }
+.checkpoint[data-pos="60%"] { left: 60%; }
+.checkpoint[data-pos="85%"] { left: 85%; }
 .checkpoint[data-pos="100%"] { left: 100%; }
 .checkpoint.final { width: 28px; height: 28px; border-width: 4px; background: var(--neon); box-shadow: 0 0 20px var(--neon), 0 0 30px rgba(255, 42, 245, 0.6); animation: pulse 2s infinite; z-index: 11; }
 .checkpoint.passed { background: var(--neon); border-color: white; box-shadow: 0 0 20px var(--neon), 0 0 30px rgba(255, 42, 245, 0.8); animation: glow 1.5s infinite alternate; }
@@ -135,7 +135,7 @@ body {
 @keyframes shimmer { 0% { opacity: 0.9; } 50% { opacity: 1; } 100% { opacity: 0.9; } }
 
 /* =================================== */
-/* [ÑËÎÒÛ È ÊÍÎÏÊÈ] */
+/* [ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½] */
 /* =================================== */
 .slots-grid { display: grid; gap: 12px; margin-top: 12px; }
 .slot-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 14px; display: flex; justify-content: space-between; align-items: center; font-size: 0.91rem; backdrop-filter: blur(10px); }
@@ -145,21 +145,21 @@ body {
 .buy-slot:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(255, 42, 245, 0.5); }
 
 /* =================================== */
-/* [ÒÀÉÌÅÐ] */
+/* [ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½] */
 /* =================================== */
 .timer-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; margin: 16px 0; backdrop-filter: blur(10px); box-shadow: var(--shadow); }
 .timer-label { color: var(--text-light); font-size: 0.9rem; }
 .timer-display { font-size: 1.8rem; font-weight: bold; color: var(--neon); text-shadow: 0 0 10px var(--neon); }
 
 /* =================================== */
-/* [ÊÍÎÏÊÈ ÍÀÂÁÀÐ] */
+/* [ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½] */
 /* =================================== */
 .subs-controls { display: flex; gap: 12px; margin-bottom: 16px; }
 .btn-neon { flex: 1; background: linear-gradient(45deg, var(--accent), var(--neon)); color: white; border: none; padding: 12px; border-radius: 16px; font-weight: 600; box-shadow: 0 4px 15px rgba(255, 77, 141, 0.3); transition: all 0.2s; }
 .btn-neon:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(255, 42, 245, 0.4); }
 
 /* =================================== */
-/* [ÏÐÎÊÀ×ÊÀ] */
+/* [ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½] */
 /* =================================== */
 .upgrade-block { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px; overflow: hidden; backdrop-filter: blur(10px); box-shadow: var(--shadow); }
 .upgrade-header { background: linear-gradient(135deg, rgba(255, 77, 141, 0.2), rgba(255, 42, 245, 0.2)); padding: 14px 16px; text-align: center; font-weight: 700; color: var(--neon); font-size: 1.1rem; border-bottom: 1px solid var(--border); }
@@ -190,7 +190,7 @@ body {
 .btn-buy-payout { background: #ff2af5; color: white; border: none; padding: 14px; border-radius: 16px; font-weight: 700; font-size: 1.1rem; width: 100%; box-shadow: 0 6px 16px rgba(255, 42, 245, 0.5); text-transform: uppercase; }
 
 /* =================================== */
-/* [ÍÈÆÍÅÅ ÌÅÍÞ] */
+/* [ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½] */
 /* =================================== */
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0;
@@ -203,7 +203,7 @@ body {
 .nav-item.active { color: var(--neon); text-shadow: 0 0 10px var(--neon); }
 
 /* =================================== */
-/* [ÑÒÐÀÍÈÖÀ ÏÎÊÓÏÊÈ] */
+/* [ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½] */
 /* =================================== */
 #buy .buy-title { text-align: center; margin: 20px 0; font-size: 1.4rem; color: var(--neon); font-weight: 700; }
 .buy-form { background: #1a1428; border: 2px solid var(--accent); border-radius: 24px; padding: 20px; box-shadow: 0 8px 32px rgba(255, 77, 141, 0.3); }

@@ -159,6 +159,13 @@ function renderHomeSlotsList(){
     container.appendChild(el);
   });
 }
+function updateSlotIndicator() {
+  const subscribedCount = user.subSlots.filter(s => s.status === 'subscribed' || s.status === 'completed').length;
+  const currentEl = document.querySelector('.current.red-bold');
+  const totalEl = document.querySelector('.total.neon-text');
+  if (currentEl) currentEl.textContent = subscribedCount;
+  if (totalEl) totalEl.textContent = user.current_slot_count + ' слотов';
+}
 
 // UPGRADE handlers (unchanged)
 function initUpgradePage(){
