@@ -386,6 +386,45 @@ function updateTimerProgress() {
     if (prog) prog.textContent = ((user.progress||0).toFixed(1)) + '%';
 }
 
+function renderHomeSlotsList() {
+  const container = document.getElementById('adSlotsContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  if (!user.adSlots || user.adSlots.length === 0) {
+    // ... (как было)
+  }
+  user.adSlots.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'slot-card active';
+    el.innerHTML = `
+      <span>${s.channel_username || s.channel_name || 'Слот'}</span>
+      <button class="delete-btn" data-id="${s.id}">Удалить (тест)</button>
+    `;
+    const delBtn = el.querySelector('.delete-btn');
+    if (delBtn) {
+      setCursor(delBtn);
+      delBtn.onclick = async () => {
+        if (confirm('Удалить слот?')) {
+          try {
+            const res = await fetch(`/api/slot/${s.id}`, {
+              method: 'DELETE',
+              headers: { 'X-Telegram-WebApp-InitData': tg.initData || '' }
+            });
+            if (res.ok) {
+              user.adSlots = user.adSlots.filter(slot => slot.id !== s.id);
+              renderHomeSlotsList();
+              tg.showAlert('Слот удалён');
+            }
+          } catch (e) {
+            tg.showAlert('Ошибка удаления');
+          }
+        }
+      };
+    }
+    container.appendChild(el);
+  });
+}
+
 // renderAdSlots adapted to server-driven slots
 function renderAdSlots() {
   const grid = document.getElementById('adSlotsGrid');

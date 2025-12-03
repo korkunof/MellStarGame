@@ -248,6 +248,22 @@ async def get_user_slots(user_id: int, request: Request, db: AsyncSession = Depe
 
     return result
 
+@app.delete("/api/slot/{slot_id}")
+async def delete_slot(slot_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-WebApp-InitData", "")
+    if init_data and not verify_telegram_initdata(init_data, BOT_TOKEN):
+        raise HTTPException(status_code=403, detail="Auth failed")
+
+    user_id = ...  # Извлеки user_id из init_data, как в других endpoints (парсинг user_str)
+    slot = await db.get(PurchasedAdSlot, slot_id)
+    if not slot or slot.advertiser_id != user_id:
+        raise HTTPException(status_code=404, detail="Slot not found or not yours")
+    
+    await db.delete(slot)
+    await db.commit()
+    return {"status": "deleted"}
+
+
 # ======================
 # Subscribe slot
 # ======================
