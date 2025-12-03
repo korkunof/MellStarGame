@@ -378,64 +378,65 @@ async function fetchUserProgress() {
 }
 
 function updateTimerProgress() {
-  const bar = document.getElementById('progressFill');
-  if (bar) bar.style.width = `${user.progress}%`;
-  // ... (остальное)
-  const checkpoints = document.querySelectorAll('.checkpoint');
-  checkpoints.forEach((cp, index) => {
-    if (index < user.current_checkpoint) cp.classList.add('passed');
-    else cp.classList.remove('passed');
-  });
+    const bar = document.getElementById('progressFill');
+    if (!bar) return;
+    bar.style.width = Math.min(100, user.progress || 0) + '%';
+    bar.style.backgroundColor = user.timer_running ? 'green' : 'red';
+    const prog = document.getElementById('progressPercent');
+    if (prog) prog.textContent = ((user.progress||0).toFixed(1)) + '%';
 }
 
 // renderAdSlots adapted to server-driven slots
-function renderAdSlots(){
+function renderAdSlots() {
   const grid = document.getElementById('adSlotsGrid');
-  if (!grid) {
-    console.warn('adSlotsGrid not found');
-    return;
-  }
+  if (!grid) return;
   grid.innerHTML = '';
-  if (!user.subSlots || user.subSlots.length === 0){
-    const empty = document.createElement('div');
-    empty.className = 'slot-card empty';
-    empty.style.justifyContent = 'center';
-    empty.style.fontStyle = 'italic';
-    empty.textContent = 'Нет слотов';
-    grid.appendChild(empty);
-    return;
+
+  // Дополняем до current_slot_count пустыми слотами
+  let slotsToRender = [...user.subSlots];
+  const emptyCount = user.current_slot_count - slotsToRender.length;
+  for (let i = 0; i < emptyCount; i++) {
+    slotsToRender.push({ status: 'empty', channel_username: 'Свободно', link: '', type: '', slot_id: null });
   }
-  user.subSlots.forEach(s=>{
+
+  slotsToRender.forEach(s => {
     const el = document.createElement('div');
-    el.className = `slot-card ${s.status||'empty'}`;
+    el.className = `slot-card ${s.status || 'empty'}`;
     el.style.display = 'flex';
     el.style.justifyContent = 'space-between';
     el.style.alignItems = 'center';
     el.style.padding = '10px';
-    el.innerHTML = `
-        <span>${s.channel_username} (${s.type})</span>
+    
+    if (s.status === 'empty') {
+      el.innerHTML = `<span>${s.channel_username}</span>`;
+    } else {
+      el.innerHTML = `
+        <span>$$ {s.channel_username} ( $${s.type})</span>
         <a href="${s.link}" target="_blank">Перейти</a>
-        <button ${s.status === 'subscribed' || s.status === 'completed' ? 'disabled' : ''} data-id="${s.slot_id}">
-            ${s.status === 'subscribed' || s.status === 'completed' ? 'Подписано' : 'Подписаться'}
+        <button $$ {s.status === 'subscribed' || s.status === 'completed' ? 'disabled' : ''} data-id=" $${s.slot_id}">
+          ${s.status === 'subscribed' || s.status === 'completed' ? 'Подписано' : 'Подписаться'}
         </button>
-    `;
-    const btn = el.querySelector('button');
-    if (btn && !btn.disabled) {
-      setCursor(btn);
-      btn.onclick = () => subscribeSlot(s.slot_id);
+      `;
+      const btn = el.querySelector('button');
+      if (btn && !btn.disabled) {
+        setCursor(btn);
+        btn.onclick = () => subscribeSlot(s.slot_id);
+      }
     }
     grid.appendChild(el);
   });
   renderHomeSlotsList();
 
+  updateSlotIndicator();
+
   // Timer auto-start logic: if all slots are subscribed -> start timer
-  const activeCount = user.subSlots.filter(s => s.status === 'subscribed').length;
-  if (activeCount === user.subSlots.length && user.subSlots.length > 0) {
-      if (!timerInterval) startTimer();
+  const subscribedCount = user.subSlots.filter(s => s.status === 'subscribed').length;
+  if (subscribedCount === user.current_slot_count && user.subSlots.length === user.current_slot_count) {
+    if (!timerInterval) startTimer();
   } else {
-      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-      user.timer_running = false;
-      updateTimerProgress();
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    user.timer_running = false;
+    updateTimerProgress();
   }
 }
 
