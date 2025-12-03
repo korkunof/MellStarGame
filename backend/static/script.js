@@ -248,37 +248,62 @@ function initBuyPage(){
     const calcType = document.getElementById('calcType');
     if (calcType && type) calcType.textContent = type.value || 'стандарт';
     const calcShows = document.getElementById('calcShows');
-    if (calcShows && shows) calcShows.textContent = shows.value || '1';
+    if (calcShows && shows) calcShows.textContent = shows.value || '1000';
   }
 
-  if (resetBtn) { setCursor(resetBtn); resetBtn.onclick = ()=>{ if (name) name.value = ''; if (link) link.value = ''; if (type) type.value = 'стандарт'; if (shows) shows.value = '1'; updateCalc(); }; }
-  if (payBtn) {
+  if (resetBtn){
+    setCursor(resetBtn);
+    resetBtn.onclick = () => {
+      if (name) name.value = '';
+      if (link) link.value = '';
+      if (type) type.value = 'standard';
+      if (shows) shows.value = '1000';
+      updateCalc();
+    };
+  }
+
+  [name,link,type,shows].forEach(e=>{ if (e && e.addEventListener) e.addEventListener('input', updateCalc); });
+  updateCalc();
+
+  if (payBtn){
     setCursor(payBtn);
     payBtn.onclick = async () => {
-      const userId = tg.initDataUnsafe?.user?.id;
-      if (!userId || !name?.value || !link?.value || !type?.value || !shows?.value) {
-        tg.showAlert && tg.showAlert('Заполните все поля');
-        return;
-      }
+      const nm = name ? name.value.trim() : '';
+      const ln = link ? link.value.trim() : '';
+      if (!nm || !ln) { alert('Заполните название и ссылку!'); return; }
+      const channelUsername = nm.startsWith('@') ? nm : '@'+nm;
+      const requiredShows = parseInt((shows && shows.value) || 1000, 10);
+      if (!confirm(`Создать слот: ${channelUsername}, показов: ${requiredShows}?`)) return;
+
       try {
-        const res = await fetch('/api/slot', {
+        const resp = await fetch('/api/slot', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type':'application/json', 'X-Telegram-WebApp-InitData': tg.initData || '' },
           body: JSON.stringify({
-            advertiser_id: userId,
-            channel_username: name.value,
-            channel_name: name.value,
-            link: link.value,
-            slot_type: type.value,
-            required_shows: parseInt(shows.value, 10)
+            advertiser_id: tg.initDataUnsafe?.user?.id || 0,
+            channel_username: channelUsername,
+            channel_name: nm,
+            link: ln,
+            slot_type: (type && type.value) || 'standard',
+            required_shows: requiredShows
           })
         });
-        if (res.ok) {
-          const data = await res.json();
-          tg.showAlert && tg.showAlert('Слот создан! ID: ' + data.slot_id);
-          // reset form
-          if (name) name.value = ''; if (link) link.value = ''; if (type) type.value = 'стандарт'; if (shows) shows.value = '1'; updateCalc();
+        if (resp.ok) {
+          const data = await resp.json();
+          tg.showAlert && tg.showAlert('Слот создан! ID: ' + (data.slot_id || '—'));
+          user.adSlots = user.adSlots || [];
+          user.adSlots.push({ channel_username: channelUsername, id: data.slot_id || Date.now() });
+          user.subSlots = user.subSlots || [];
+          if (user.subSlots.length < (user.current_slot_count||5)) {
+            user.subSlots.push({ id: user.subSlots.length, status: 'empty', expires: null });
+          }
+          resetBtn && resetBtn.click();
+          document.querySelector('[data-page="home"]').click();
+          renderAdSlots();
+          renderHomeSlotsList();
         } else {
+          const txt = await resp.text().catch(()=>null);
+          console.error('Slot create failed', resp.status, txt);
           tg.showAlert && tg.showAlert('Ошибка создания слота');
         }
       } catch (e) {

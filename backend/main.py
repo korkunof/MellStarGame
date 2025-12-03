@@ -309,9 +309,9 @@ async def subscribe_slot(request: Request, background_tasks: BackgroundTasks, db
 
     return {"status": "subscribed", "timer_running": user.timer_running}
 
-# background task to close a subscribed slot after 180s (test)
+# background task to close a subscribed slot after 60s (test)
 async def close_slot_task(user_id: int, slot_id: int):
-    await asyncio.sleep(180)
+    await asyncio.sleep(60)
     async with AsyncSessionLocal() as db:
         us_res = await db.execute(select(UserSlot).where(UserSlot.user_id == user_id, UserSlot.slot_id == slot_id))
         user_slot = us_res.scalar()
