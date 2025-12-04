@@ -143,7 +143,14 @@ function renderHomeSlotsList(){
   const container = document.getElementById('adSlotsContainer');
   if (!container) return;
   container.innerHTML = '';
-  if (!user.adSlots || user.adSlots.length === 0){
+
+  // Загружаем скрытые ID из localStorage
+  let hiddenSlots = JSON.parse(localStorage.getItem('hiddenSlots') || '[]');
+
+  // Фильтруем слоты: показываем только не скрытые
+  const visibleSlots = user.adSlots.filter(s => !hiddenSlots.includes(s.id));
+
+  if (visibleSlots.length === 0){
     const empty = document.createElement('div');
     empty.className = 'slot-card empty';
     empty.style.justifyContent = 'center';
@@ -152,10 +159,36 @@ function renderHomeSlotsList(){
     container.appendChild(empty);
     return;
   }
-  user.adSlots.forEach(s=>{
+  visibleSlots.forEach(s=>{
     const el = document.createElement('div');
     el.className = 'slot-card active';
-    el.textContent = s.channel_username || s.channel_name || 'Слот';
+    el.style.display = 'flex';
+    el.style.justifyContent = 'space-between';
+    el.style.alignItems = 'center';
+
+    // Левый блок: название слота
+    const left = document.createElement('span');
+    left.textContent = s.channel_username || s.channel_name || 'Слот';
+    el.appendChild(left);
+
+    // Правый блок: крестик для скрытия
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';  // Или используй SVG-иконку для крестика
+    closeBtn.style.background = 'none';
+    closeBtn.style.border = 'none';
+    closeBtn.style.color = 'red';
+    closeBtn.style.fontSize = '1.2rem';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.onclick = () => {
+        // Добавляем ID в hiddenSlots и сохраняем
+        hiddenSlots.push(s.id);
+        localStorage.setItem('hiddenSlots', JSON.stringify(hiddenSlots));
+        // Перерендерим список
+        renderHomeSlotsList();
+        tg.showAlert && tg.showAlert('Слот скрыт (можно очистить localStorage для возврата)');
+    };
+    el.appendChild(closeBtn);
+
     container.appendChild(el);
   });
 }
@@ -251,66 +284,37 @@ function initBuyPage(){
     if (calcShows && shows) calcShows.textContent = shows.value || '1000';
   }
 
-  if (resetBtn){
-    setCursor(resetBtn);
-    resetBtn.onclick = () => {
-      if (name) name.value = '';
-      if (link) link.value = '';
-      if (type) type.value = 'standard';
-      if (shows) shows.value = '1000';
-      updateCalc();
+  if (resetBtn){ setCursor(resetBtn); resetBtn.onclick = ()=>{ if(name)name.value=''; if(link)link.value=''; if(type)type.value='стандарт'; if(shows)shows.value='1000'; updateCalc(); }; }
+  if (payBtn){ setCursor(payBtn); payBtn.onclick = createAdSlot; }
+
+  async function createAdSlot(){
+    const payload = {
+      advertiser_id: tg.initDataUnsafe?.user?.id || 0,
+      channel_username: name?.value || 'test',
+      channel_name: name?.value || 'test',
+      link: link?.value || '',
+      slot_type: type?.value || 'standard',
+      required_shows: parseInt(shows?.value || '1000', 10)
     };
-  }
-
-  [name,link,type,shows].forEach(e=>{ if (e && e.addEventListener) e.addEventListener('input', updateCalc); });
-  updateCalc();
-
-  if (payBtn){
-    setCursor(payBtn);
-    payBtn.onclick = async () => {
-      const nm = name ? name.value.trim() : '';
-      const ln = link ? link.value.trim() : '';
-      if (!nm || !ln) { alert('Заполните название и ссылку!'); return; }
-      const channelUsername = nm.startsWith('@') ? nm : '@'+nm;
-      const requiredShows = parseInt((shows && shows.value) || 1000, 10);
-      if (!confirm(`Создать слот: ${channelUsername}, показов: ${requiredShows}?`)) return;
-
-      try {
-        const resp = await fetch('/api/slot', {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json', 'X-Telegram-WebApp-InitData': tg.initData || '' },
-          body: JSON.stringify({
-            advertiser_id: tg.initDataUnsafe?.user?.id || 0,
-            channel_username: channelUsername,
-            channel_name: nm,
-            link: ln,
-            slot_type: (type && type.value) || 'standard',
-            required_shows: requiredShows
-          })
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          tg.showAlert && tg.showAlert('Слот создан! ID: ' + (data.slot_id || '—'));
-          user.adSlots = user.adSlots || [];
-          user.adSlots.push({ channel_username: channelUsername, id: data.slot_id || Date.now() });
-          user.subSlots = user.subSlots || [];
-          if (user.subSlots.length < (user.current_slot_count||5)) {
-            user.subSlots.push({ id: user.subSlots.length, status: 'empty', expires: null });
-          }
-          resetBtn && resetBtn.click();
-          document.querySelector('[data-page="home"]').click();
-          renderAdSlots();
-          renderHomeSlotsList();
-        } else {
-          const txt = await resp.text().catch(()=>null);
-          console.error('Slot create failed', resp.status, txt);
-          tg.showAlert && tg.showAlert('Ошибка создания слота');
-        }
-      } catch (e) {
-        console.error('Network error create slot', e);
-        tg.showAlert && tg.showAlert('Ошибка сети при создании слота');
+    try {
+      const res = await fetch('/api/slot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Telegram-WebApp-InitData': tg.initData || '' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        tg.showAlert && tg.showAlert(`Слот создан! ID: ${data.slot_id}`);
+        user.adSlots = await fetchPurchasedSlots();  // Перезагрузи список
+        renderHomeSlotsList();  // Перерендери
+      } else {
+        console.warn('create slot fail', res.status);
+        tg.showAlert && tg.showAlert('Ошибка создания слота');
       }
-    };
+    } catch (e) {
+      console.error('Network error create slot', e);
+      tg.showAlert && tg.showAlert('Ошибка сети при создании слота');
+    }
   }
 }
 
@@ -337,6 +341,34 @@ async function fetchUserSlots() {
         return [];
     }
 }
+
+// Новая функция для загрузки купленных слотов
+async function fetchPurchasedSlots() {
+    const userId = tg.initDataUnsafe?.user?.id;
+    if (!userId) return [];
+    try {
+        const res = await fetch(`/api/purchased_slots/${userId}`, {
+            headers: { 'X-Telegram-WebApp-InitData': tg.initData || '' }
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.map(s => ({
+            id: s.id,
+            channel_username: s.channel_username,
+            channel_name: s.channel_name,
+            link: s.link,
+            type: s.type,
+            status: s.status,
+            required_shows: s.required_shows,
+            current_shows: s.current_shows,
+            price_paid: s.price_paid
+        }));
+    } catch (e) {
+        console.warn('fetchPurchasedSlots error', e);
+        return [];
+    }
+}
+
 async function subscribeSlot(slot_id) {
     const userId = tg.initDataUnsafe?.user?.id;
     if (!userId) return;
@@ -358,8 +390,11 @@ async function subscribeSlot(slot_id) {
         console.warn('subscribeSlot error', e);
     }
 }
+
+// Обновлённая функция загрузки (теперь загружает оба типа слотов)
 async function loadSlots() {
-    user.subSlots = await fetchUserSlots();
+    user.subSlots = await fetchUserSlots();  // Слоты для подписки (как было)
+    user.adSlots = await fetchPurchasedSlots();  // Купленные слоты
     renderAdSlots();
     renderHomeSlotsList();
 }
@@ -386,46 +421,6 @@ function updateTimerProgress() {
     if (prog) prog.textContent = ((user.progress||0).toFixed(1)) + '%';
 }
 
-function renderHomeSlotsList() {
-  const container = document.getElementById('adSlotsContainer');
-  if (!container) return;
-  container.innerHTML = '';
-  if (!user.adSlots || user.adSlots.length === 0) {
-    // ... (как было)
-  }
-  user.adSlots.forEach(s => {
-    const el = document.createElement('div');
-    el.className = 'slot-card active';
-    el.innerHTML = `
-      <span>${s.channel_username || s.channel_name || 'Слот'}</span>
-      <button class="delete-btn" data-id="${s.id}">Удалить (тест)</button>
-    `;
-    const delBtn = el.querySelector('.delete-btn');
-    if (delBtn) {
-      setCursor(delBtn);
-      delBtn.onclick = async () => {
-        if (confirm('Удалить слот?')) {
-          try {
-            const res = await fetch(`/api/slot/${s.id}`, {
-              method: 'DELETE',
-              headers: { 'X-Telegram-WebApp-InitData': tg.initData || '' }
-            });
-            if (res.ok) {
-              user.adSlots = user.adSlots.filter(slot => slot.id !== s.id);
-              renderHomeSlotsList();
-              tg.showAlert('Слот удалён');
-            }
-          } catch (e) {
-            tg.showAlert('Ошибка удаления');
-          }
-        }
-      };
-    }
-    container.appendChild(el);
-  });
-}
-
-// renderAdSlots adapted to server-driven slots
 function renderAdSlots() {
   const grid = document.getElementById('adSlotsGrid');
   if (!grid) return;

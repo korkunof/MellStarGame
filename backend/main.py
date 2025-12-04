@@ -172,6 +172,39 @@ async def save_user(user_id: int, request: Request, db: AsyncSession = Depends(g
     await db.commit()
     return {"status": "saved"}
 
+@app.get("/api/purchased_slots/{user_id}")
+async def get_purchased_slots(user_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-WebApp-InitData", "")
+    if init_data and not verify_telegram_initdata(init_data, BOT_TOKEN):
+        raise HTTPException(status_code=403, detail="Auth failed")
+
+    # Проверяем, что пользователь существует (опционально)
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Запрос всех купленных слотов для этого пользователя
+    result = await db.execute(
+        select(PurchasedAdSlot).where(PurchasedAdSlot.advertiser_id == user_id)
+    )
+    slots = result.scalars().all()
+
+    # Формируем ответ (аналогично /api/user_slots)
+    return [
+        {
+            "id": slot.id,
+            "channel_username": slot.channel_username,
+            "channel_name": slot.channel_name,
+            "link": slot.link,
+            "type": slot.slot_type,
+            "status": slot.status,
+            "required_shows": slot.required_shows,
+            "current_shows": slot.current_shows,
+            "price_paid": slot.price_paid
+        }
+        for slot in slots
+    ]
+
 # ======================
 # API: get personal slots for user (assign if less than current_slot_count)
 # ======================
