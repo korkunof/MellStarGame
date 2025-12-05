@@ -59,7 +59,7 @@ class PurchasedAdSlot(Base):
     required_shows = Column(Integer)
     current_shows = Column(Integer, default=0)
     price_paid = Column(Float)
-    status = Column(String, default="active")  # active / completed
+    status = Column(String, default="active")  # active / completing / completed
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -69,7 +69,7 @@ class UserSlot(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(BigInteger, index=True)
     slot_id = Column(Integer, index=True)
-    status = Column(String, default="active")  # active / subscribed / completed / need_subscribe
+    status = Column(String, default="active")  # active / subscribed / completing / completed / need_subscribe
     subscribed_at = Column(DateTime(timezone=True), nullable=True)
 
 

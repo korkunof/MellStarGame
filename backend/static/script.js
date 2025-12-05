@@ -429,6 +429,24 @@ async function fetchPurchasedSlots() {
     }
 }
 
+// НОВАЯ ФУНКЦИЯ — отсчёт для completing слотов
+function startCountdown(slotId, seconds = 60) {
+  const countdownEl = document.getElementById(`countdown-${slotId}`);
+  if (!countdownEl) return;
+  let remaining = seconds;
+  const interval = setInterval(() => {
+    remaining--;
+    countdownEl.textContent = `Убирается через ${remaining} сек`;
+    if (remaining <= 0) {
+      clearInterval(interval);
+      // Удаляем слот локально (polling скоро обновит)
+      user.subSlots = user.subSlots.filter(s => s.slot_id !== slotId);
+      renderAdSlots();
+    }
+  }, 1000);
+}
+
+// ОБНОВЛЁННАЯ ФУНКЦИЯ subscribeSlot
 async function subscribeSlot(slot_id) {
     const userId = tg.initDataUnsafe?.user?.id;
     if (!userId) return;
@@ -443,6 +461,12 @@ async function subscribeSlot(slot_id) {
             return;
         }
         const data = await res.json();
+
+        // Если слот перешёл в completing — запускаем отсчёт
+        if (data.slot_status === 'completing') {
+          startCountdown(slot_id, 60);
+        }
+
         user.timer_running = data.timer_running;
         updateTimerProgress();
         await loadSlots(); // обновляем список после подписки
@@ -481,6 +505,7 @@ function updateTimerProgress() {
     if (prog) prog.textContent = ((user.progress||0).toFixed(1)) + '%';
 }
 
+// ОБНОВЛЁННАЯ ФУНКЦИЯ renderAdSlots
 function renderAdSlots() {
   const grid = document.getElementById('adSlotsGrid');
   if (!grid) return;
@@ -493,12 +518,12 @@ function renderAdSlots() {
     slotsToRender.push({ status: 'empty', channel_username: 'Свободно', link: '', type: '', slot_id: null });
   }
 
-// Сортировка: VIP первыми
-slotsToRender.sort((a, b) => {
-  if (a.type === 'VIP слот' && b.type !== 'VIP слот') return -1;
-  if (a.type !== 'VIP слот' && b.type === 'VIP слот') return 1;
-  return 0;  // Рандом внутри групп сохраняется
-});
+  // Сортировка: VIP первыми
+  slotsToRender.sort((a, b) => {
+    if (a.type === 'vip' && b.type !== 'vip') return -1;
+    if (a.type !== 'vip' && b.type === 'vip') return 1;
+    return 0;
+  });
 
   slotsToRender.forEach(s => {
     const el = document.createElement('div');
@@ -512,12 +537,19 @@ slotsToRender.sort((a, b) => {
       el.innerHTML = `<span>${s.channel_username}</span>`;
     } else {
       el.innerHTML = `
-        <span>$$ {s.channel_username} ( $${s.type})</span>
+        <span>${s.channel_username || 'Слот'} (${s.type === 'vip' ? 'VIP' : 'стандарт'})</span>
         <a href="${s.link}" target="_blank">Перейти</a>
-        <button $$ {s.status === 'subscribed' || s.status === 'completed' ? 'disabled' : ''} data-id=" $${s.slot_id}">
-          ${s.status === 'subscribed' || s.status === 'completed' ? 'Подписано' : 'Подписаться'}
+        <button ${s.status === 'subscribed' || s.status === 'completed' || s.status === 'completing' ? 'disabled' : ''} data-id="${s.slot_id}">
+          ${s.status === 'subscribed' || s.status === 'completed' || s.status === 'completing' ? 'Подписано' : 'Подписаться'}
         </button>
+        ${s.status === 'completing' ? `<div id="countdown-${s.slot_id}" style="color: red; font-size: 0.8rem;">Убирается через 60 сек</div>` : ''}
       `;
+
+      // Запуск отсчёта при рендере (на случай, если слот уже completing)
+      if (s.status === 'completing') {
+        startCountdown(s.slot_id, 60);
+      }
+
       const btn = el.querySelector('button');
       if (btn && !btn.disabled) {
         setCursor(btn);

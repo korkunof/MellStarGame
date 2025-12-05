@@ -25,7 +25,7 @@ from database import engine, AsyncSessionLocal
 from models import User, Base, PurchasedAdSlot, UserSlot
 from auth import verify_telegram_initdata
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, exists
+from sqlalchemy import select, exists, delete
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -221,7 +221,7 @@ async def get_user_slots(user_id: int, request: Request, db: AsyncSession = Depe
     current_us_res = await db.execute(
         select(UserSlot).where(
             UserSlot.user_id == user_id,
-            UserSlot.status.in_(["active", "subscribed"])
+            UserSlot.status.in_(["active", "subscribed", "completing"])  # Показывать completing с отсчётом
         )
     )
     current_user_slots = current_us_res.scalars().all()
@@ -235,7 +235,7 @@ async def get_user_slots(user_id: int, request: Request, db: AsyncSession = Depe
         )
         available_res = await db.execute(
             select(PurchasedAdSlot).where(
-                PurchasedAdSlot.status == "active",
+                PurchasedAdSlot.status == "active",  # Только active, без completing/completed
                 ~subq
             )
         )
@@ -256,7 +256,7 @@ async def get_user_slots(user_id: int, request: Request, db: AsyncSession = Depe
         current_us_res = await db.execute(
             select(UserSlot).where(
                 UserSlot.user_id == user_id,
-                UserSlot.status.in_(["active", "subscribed"])
+                UserSlot.status.in_(["active", "subscribed", "completing"])  # Показывать completing с отсчётом
             )
         )
         current_user_slots = current_us_res.scalars().all()
@@ -303,7 +303,7 @@ async def delete_slot(slot_id: int, request: Request, db: AsyncSession = Depends
 # Subscribe slot
 # ======================
 @app.post("/api/subscribe_slot")
-async def subscribe_slot(request: Request, db: AsyncSession = Depends(get_db)):
+async def subscribe_slot(request: Request, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     payload = await request.json()
     user_id = payload.get("user_id")
     slot_id = payload.get("slot_id")
@@ -333,14 +333,15 @@ async def subscribe_slot(request: Request, db: AsyncSession = Depends(get_db)):
         await db.commit()
 
         if slot.current_shows >= slot.required_shows:
-            slot.status = "completed"  # Глобально завершить слот
-            # Обновить все UserSlot с этим slot_id (для всех пользователей)
-            us_res = await db.execute(select(UserSlot).where(UserSlot.slot_id == slot_id, UserSlot.status == "subscribed"))
+            slot.status = "completing"  # Начать отсчёт
+            # Обновить все UserSlot на completing
+            us_res = await db.execute(select(UserSlot).where(UserSlot.slot_id == slot_id))
             user_slots = us_res.scalars().all()
             for us in user_slots:
-                us.status = "completed"
+                us.status = "completing"
             await db.commit()
-            # Опционально: добавить +10 мин ожидания перед полным закрытием, но для теста не нужно
+            # Запустить background для задержки +1 мин
+            background_tasks.add_task(complete_slot_final, slot_id)
 
     # recompute timer_running
     cur_res = await db.execute(
@@ -353,7 +354,17 @@ async def subscribe_slot(request: Request, db: AsyncSession = Depends(get_db)):
     user.timer_running = not any(us.status == "active" for us in cur_slots)
     await db.commit()
 
-    return {"status": "subscribed", "timer_running": user.timer_running}
+    return {"status": "subscribed", "slot_status": slot.status if slot else "unknown", "timer_running": user.timer_running}
+
+async def complete_slot_final(slot_id: int):
+    await asyncio.sleep(60)  # 1 мин для теста, в проде 600 для 10 мин
+    async with AsyncSessionLocal() as db:
+        slot = await db.get(PurchasedAdSlot, slot_id)
+        if slot and slot.status == "completing":
+            slot.status = "completed"
+            # Удалить все UserSlot с этим slot_id
+            await db.execute(delete(UserSlot).where(UserSlot.slot_id == slot_id))
+            await db.commit()
 
 # ======================
 # get user progress (for polling)
