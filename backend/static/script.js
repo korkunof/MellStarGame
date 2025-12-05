@@ -266,23 +266,83 @@ function initUpgradePage(){
 
 // BUY page
 function initBuyPage(){
-  const name = qs('#slotName','#adName');
-  const link = qs('#slotLink','#adLink');
-  const type = qs('#slotType','#adType');
-  const shows = qs('#showsSelect','#adShows');
+  const platformSelect = document.getElementById('platformSelect');
+  const slotName = document.getElementById('slotName');
+  const slotLink = document.getElementById('slotLink');
+  const slotType = document.getElementById('slotType');
+  const showsSelect = document.getElementById('showsSelect');
+  const calcShows = document.getElementById('calcShows');
+  const showsCost = document.getElementById('showsCost');
+  const calcType = document.getElementById('calcType');
+  const typeCost = document.getElementById('typeCost');
   const totalCalc = document.getElementById('totalCalc');
   const resetBtn = document.getElementById('resetBtn');
   const payBtn = document.getElementById('payBtn');
 
+  // update calc
   function updateCalc(){
-    if (!totalCalc) return;
-    const base = 0;
-    totalCalc.textContent = base;
-    const calcType = document.getElementById('calcType');
-    if (calcType && type) calcType.textContent = type.value || 'стандарт';
-    const calcShows = document.getElementById('calcShows');
-    if (calcShows && shows) calcShows.textContent = shows.value || '1000';
+    const shows = parseInt(showsSelect.value, 10) || 1;  // Fallback на 1 для теста
+    calcShows.textContent = shows;
+    showsCost.textContent = shows * 500;  // Для теста: 500 за каждую подписку (имитация 0.5 за 1000 -> 500)
+    const tCost = slotType.value === 'стандарт' ? 1000 : 2000;
+    typeCost.textContent = tCost;
+    calcType.textContent = slotType.value;
+    totalCalc.textContent = 100 + tCost + parseInt(showsCost.textContent,10);
   }
+
+  if (platformSelect) platformSelect.onchange = updateCalc;
+  if (slotType) slotType.onchange = updateCalc;
+  if (showsSelect) showsSelect.onchange = updateCalc;
+  updateCalc();
+
+  if (resetBtn) {
+    setCursor(resetBtn);
+    resetBtn.onclick = () => {
+      if (slotName) slotName.value = '';
+      if (slotLink) slotLink.value = '';
+      if (slotType) slotType.value = 'стандарт';
+      if (showsSelect) showsSelect.value = '1';  // Для теста fallback на 1
+      updateCalc();
+    };
+  }
+
+  if (payBtn) {
+    setCursor(payBtn);
+    payBtn.onclick = async ()=>{
+      if (!slotName.value || !slotLink.value) {
+        tg.showAlert && tg.showAlert('Заполните название и ссылку');
+        return;
+      }
+      const payload = {
+        advertiser_id: tg.initDataUnsafe?.user?.id || 0,
+        channel_username: slotName.value,
+        channel_name: slotName.value,
+        link: slotLink.value,
+        slot_type: slotType.value === 'VIP слот' ? 'vip' : 'standard',
+        required_shows: parseInt(showsSelect.value, 10) || 1,  // Fallback на 1 для теста
+        price_paid: parseInt(totalCalc.textContent, 10) || 0
+      };
+      try {
+        const res = await fetch('/api/slot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Telegram-WebApp-InitData': tg.initData || '' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          tg.showAlert && tg.showAlert('Слот создан!');
+          await fetchPurchasedSlots();  // Перезагрузи список
+          renderHomeSlotsList();  // Перерендери
+        } else {
+          console.warn('create slot fail', res.status);
+          tg.showAlert && tg.showAlert('Ошибка создания слота');
+        }
+      } catch (e) {
+        console.error('Network error create slot', e);
+        tg.showAlert && tg.showAlert('Ошибка сети при создании слота');
+      }
+    };
+  }
+}
 
   if (resetBtn){ setCursor(resetBtn); resetBtn.onclick = ()=>{ if(name)name.value=''; if(link)link.value=''; if(type)type.value='стандарт'; if(shows)shows.value='1000'; updateCalc(); }; }
   if (payBtn){ setCursor(payBtn); payBtn.onclick = createAdSlot; }
@@ -316,7 +376,7 @@ function initBuyPage(){
       tg.showAlert && tg.showAlert('Ошибка сети при создании слота');
     }
   }
-}
+
 
 // ==================== API integration ====================
 async function fetchUserSlots() {
@@ -432,6 +492,13 @@ function renderAdSlots() {
   for (let i = 0; i < emptyCount; i++) {
     slotsToRender.push({ status: 'empty', channel_username: 'Свободно', link: '', type: '', slot_id: null });
   }
+
+// Сортировка: VIP первыми
+slotsToRender.sort((a, b) => {
+  if (a.type === 'VIP слот' && b.type !== 'VIP слот') return -1;
+  if (a.type !== 'VIP слот' && b.type === 'VIP слот') return 1;
+  return 0;  // Рандом внутри групп сохраняется
+});
 
   slotsToRender.forEach(s => {
     const el = document.createElement('div');

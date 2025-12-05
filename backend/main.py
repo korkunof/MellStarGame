@@ -240,12 +240,14 @@ async def get_user_slots(user_id: int, request: Request, db: AsyncSession = Depe
             )
         )
         available_slots = available_res.scalars().all()
-
+        # Сортировка: сначала старые слоты (FIFO), затем VIP приоритет
+        available_slots.sort(key=lambda s: (s.created_at, 0 if s.slot_type == "vip" else 1))  # VIP (0) перед std (1), по created_at
         vip = [s for s in available_slots if s.slot_type == "vip"]
         std = [s for s in available_slots if s.slot_type != "vip"]
-        shuffle(vip)
-        shuffle(std)
-        to_assign = (vip + std)[: (user.current_slot_count - count_current) ]
+        shuffle(vip)  # Рандом внутри VIP
+        shuffle(std)  # Рандом внутри std
+        to_assign = vip + std  # VIP всегда первыми (вверх в списке)
+        to_assign = to_assign[: (user.current_slot_count - count_current)]
 
         for s in to_assign:
             db.add(UserSlot(user_id=user_id, slot_id=s.id, status="active"))
@@ -301,7 +303,7 @@ async def delete_slot(slot_id: int, request: Request, db: AsyncSession = Depends
 # Subscribe slot
 # ======================
 @app.post("/api/subscribe_slot")
-async def subscribe_slot(request: Request, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def subscribe_slot(request: Request, db: AsyncSession = Depends(get_db)):
     payload = await request.json()
     user_id = payload.get("user_id")
     slot_id = payload.get("slot_id")
@@ -324,10 +326,21 @@ async def subscribe_slot(request: Request, background_tasks: BackgroundTasks, db
 
     user_slot.status = "subscribed"
     user_slot.subscribed_at = datetime.utcnow()
-    await db.commit()
 
-    # schedule close task for this slot (per-user)
-    background_tasks.add_task(close_slot_task, user_id, slot_id)
+    slot = await db.get(PurchasedAdSlot, slot_id)
+    if slot:
+        slot.current_shows += 1  # Инкремент подписок
+        await db.commit()
+
+        if slot.current_shows >= slot.required_shows:
+            slot.status = "completed"  # Глобально завершить слот
+            # Обновить все UserSlot с этим slot_id (для всех пользователей)
+            us_res = await db.execute(select(UserSlot).where(UserSlot.slot_id == slot_id, UserSlot.status == "subscribed"))
+            user_slots = us_res.scalars().all()
+            for us in user_slots:
+                us.status = "completed"
+            await db.commit()
+            # Опционально: добавить +10 мин ожидания перед полным закрытием, но для теста не нужно
 
     # recompute timer_running
     cur_res = await db.execute(
@@ -341,17 +354,6 @@ async def subscribe_slot(request: Request, background_tasks: BackgroundTasks, db
     await db.commit()
 
     return {"status": "subscribed", "timer_running": user.timer_running}
-
-# background task to close a subscribed slot after 60s (test)
-async def close_slot_task(user_id: int, slot_id: int):
-    await asyncio.sleep(60)
-    async with AsyncSessionLocal() as db:
-        us_res = await db.execute(select(UserSlot).where(UserSlot.user_id == user_id, UserSlot.slot_id == slot_id))
-        user_slot = us_res.scalar()
-        if user_slot and user_slot.status == "subscribed":
-            user_slot.status = "completed"
-            await db.commit()
-            # after completion, next get_user_slots will assign a new slot for user if there are available ones
 
 # ======================
 # get user progress (for polling)
