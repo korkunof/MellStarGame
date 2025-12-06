@@ -8,7 +8,8 @@ from sqlalchemy import (
     DateTime,
     Boolean,
     Text,
-    func
+    func,
+    UniqueConstraint
 )
 from database import Base
 
@@ -90,3 +91,14 @@ class Referral(Base):
     referrer_id = Column(BigInteger)
     referred_id = Column(BigInteger, unique=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserSubscribedChannel(Base):
+    __tablename__ = "user_subscribed_channels"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, index=True)
+    channel_username = Column(String, index=True)
+    subscribed_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint('user_id', 'channel_username', name='uq_user_channel'),)

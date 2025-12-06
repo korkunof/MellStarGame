@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 
 # === Наши модули ===
 from database import engine, AsyncSessionLocal
-from models import User, Base, PurchasedAdSlot, UserSlot
+from models import User, Base, PurchasedAdSlot, UserSlot, UserSubscribedChannel
 from auth import verify_telegram_initdata
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, exists, delete
@@ -229,24 +229,37 @@ async def get_user_slots(user_id: int, request: Request, db: AsyncSession = Depe
 
     # assign more if needed
     if count_current < user.current_slot_count:
-        subq = exists().where(
+        subq_slot = exists().where(
             UserSlot.slot_id == PurchasedAdSlot.id,
             UserSlot.user_id == user_id
+        )
+        subq_channel = exists().where(
+            UserSubscribedChannel.user_id == user_id,
+            UserSubscribedChannel.channel_username == PurchasedAdSlot.channel_username
         )
         available_res = await db.execute(
             select(PurchasedAdSlot).where(
                 PurchasedAdSlot.status == "active",  # Только active, без completing/completed
-                ~subq
+                ~subq_slot,
+                ~subq_channel
             )
         )
         available_slots = available_res.scalars().all()
-        # Сортировка: сначала старые слоты (FIFO), затем VIP приоритет
-        available_slots.sort(key=lambda s: (s.created_at, 0 if s.slot_type == "vip" else 1))  # VIP (0) перед std (1), по created_at
+
+        # NEW: Unique by channel_username - take oldest per channel
+        unique_slots = {}
+        for s in sorted(available_slots, key=lambda x: x.created_at):  # Sort by created_at ascending (oldest first)
+            if s.channel_username not in unique_slots:
+                unique_slots[s.channel_username] = s
+        available_slots = list(unique_slots.values())  # Now unique list
+
+        # Continue with sorting: first old slots (FIFO), then VIP priority
+        available_slots.sort(key=lambda s: (s.created_at, 0 if s.slot_type == "vip" else 1))  # VIP (0) before std (1), by created_at
         vip = [s for s in available_slots if s.slot_type == "vip"]
         std = [s for s in available_slots if s.slot_type != "vip"]
-        shuffle(vip)  # Рандом внутри VIP
-        shuffle(std)  # Рандом внутри std
-        to_assign = vip + std  # VIP всегда первыми (вверх в списке)
+        shuffle(vip)  # Random inside VIP
+        shuffle(std)  # Random inside std
+        to_assign = vip + std  # VIP always first (top in list)
         to_assign = to_assign[: (user.current_slot_count - count_current)]
 
         for s in to_assign:
@@ -330,6 +343,17 @@ async def subscribe_slot(request: Request, background_tasks: BackgroundTasks, db
     slot = await db.get(PurchasedAdSlot, slot_id)
     if slot:
         slot.current_shows += 1  # Инкремент подписок
+
+        # Record the channel subscription history
+        channel = slot.channel_username
+        subq = exists().where(
+            UserSubscribedChannel.user_id == user_id,
+            UserSubscribedChannel.channel_username == channel
+        )
+        channel_exists = await db.execute(select(subq))
+        if not channel_exists.scalar():
+            db.add(UserSubscribedChannel(user_id=user_id, channel_username=channel))
+
         await db.commit()
 
         if slot.current_shows >= slot.required_shows:
